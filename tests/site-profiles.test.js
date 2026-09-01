@@ -13,7 +13,7 @@ const context = { globalThis: {} };
 load(path.join("src", "site-profiles.js"), context);
 load(path.join("src", "site-filter.js"), context);
 const profiles = context.globalThis.AIInputHistory.SiteProfiles;
-const { orderSites } = context.globalThis.AIInputHistory.siteFilterModel;
+const { calculateMenuLayout, orderSites } = context.globalThis.AIInputHistory.siteFilterModel;
 
 test("识别 Gemini、Grok、GLM 和 Qwen 官方站点", () => {
   assert.equal(profiles.forSite("gemini.google.com").id, "gemini");
@@ -47,6 +47,22 @@ test("每个已适配站点都包含本地官方图标资源", () => {
 test("筛选菜单始终把全部网站放在第一项", () => {
   const result = orderSites("grok.com", ["chat.qwen.ai", "grok.com", "chat.z.ai"]);
   assert.deepEqual(Array.from(result), ["*", "grok.com", "chat.qwen.ai", "chat.z.ai"]);
+});
+
+test("筛选菜单靠近窗口底部时向上展开并保持在视口内", () => {
+  const layout = calculateMenuLayout({ left: 350, top: 680, bottom: 712 }, 420, 760, 32);
+  assert.equal(layout.top, "auto");
+  assert.equal(layout.bottom, "37px");
+  assert.equal(layout.width, "320px");
+  assert.equal(layout.left, "-262px");
+  assert.equal(layout.maxHeight, "420px");
+});
+
+test("筛选菜单空间充足时向下展开并允许滚动显示全部网站", () => {
+  const layout = calculateMenuLayout({ left: 16, top: 100, bottom: 132 }, 390, 844, 32);
+  assert.equal(layout.top, "37px");
+  assert.equal(layout.bottom, "auto");
+  assert.equal(layout.maxHeight, "420px");
 });
 
 test("Copilot、Perplexity、Kimi、豆包使用专项输入框选择器", () => {

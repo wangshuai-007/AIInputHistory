@@ -12,6 +12,7 @@ if (!manifest.permissions?.includes("storage")) errors.push("缺少 storage 权�
 if (!manifest.content_scripts?.[0]?.matches?.includes("<all_urls>")) errors.push("未启用全站输入框支持");
 
 const referencedFiles = [
+  manifest.background?.service_worker,
   manifest.action?.default_popup,
   ...manifest.content_scripts.flatMap((script) => script.js || [])
 ].filter(Boolean);

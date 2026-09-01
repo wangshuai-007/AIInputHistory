@@ -2,11 +2,12 @@
   "use strict";
 
   class SiteFilter {
-    constructor(root, currentSite, onChange) {
+    constructor(root, currentSite, onChange, onExpanded = () => {}) {
       this.root = root;
       this.currentSite = currentSite;
       this.selectedSite = currentSite;
       this.onChange = onChange;
+      this.onExpanded = onExpanded;
       this.root.innerHTML = `<button class="site-trigger" type="button" aria-haspopup="listbox" aria-expanded="false"></button><div class="site-menu hidden" role="listbox"></div>`;
       this.trigger = root.querySelector(".site-trigger");
       this.menu = root.querySelector(".site-menu");
@@ -19,6 +20,7 @@
       if (!this.options.includes(this.selectedSite)) this.selectedSite = this.currentSite;
       this.menu.innerHTML = this.options.map((site) => this.optionMarkup(site)).join("");
       this.updateTrigger();
+      if (!this.menu.classList.contains("hidden")) this.positionMenu();
     }
 
     select(site) {
@@ -65,6 +67,14 @@
     setExpanded(expanded) {
       this.menu.classList.toggle("hidden", !expanded);
       this.trigger.setAttribute("aria-expanded", String(expanded));
+      this.onExpanded(expanded);
+      if (expanded) this.positionMenu();
+    }
+
+    positionMenu() {
+      const triggerRect = this.trigger.getBoundingClientRect();
+      const layout = calculateMenuLayout(triggerRect, window.innerWidth, window.innerHeight, this.trigger.offsetHeight);
+      Object.assign(this.menu.style, layout);
     }
 
     isFocused() {
@@ -101,6 +111,24 @@
     return ["*", currentSite, ...sites.filter((site, index) => site !== currentSite && sites.indexOf(site) === index)];
   }
 
+  function calculateMenuLayout(triggerRect, viewportWidth, viewportHeight, triggerHeight) {
+    const margin = 12;
+    const gap = 5;
+    const availableBelow = viewportHeight - triggerRect.bottom - margin - gap;
+    const availableAbove = triggerRect.top - margin - gap;
+    const openAbove = availableBelow < 220 && availableAbove > availableBelow;
+    const availableHeight = Math.max(96, openAbove ? availableAbove : availableBelow);
+    const width = Math.min(320, viewportWidth - margin * 2);
+    const desiredLeft = Math.max(margin, Math.min(triggerRect.left, viewportWidth - margin - width));
+    return {
+      width: `${width}px`,
+      maxHeight: `${Math.min(420, availableHeight)}px`,
+      left: `${desiredLeft - triggerRect.left}px`,
+      top: openAbove ? "auto" : `${triggerHeight + gap}px`,
+      bottom: openAbove ? `${triggerHeight + gap}px` : "auto"
+    };
+  }
+
   namespace.SiteFilter = SiteFilter;
-  namespace.siteFilterModel = { orderSites };
+  namespace.siteFilterModel = { calculateMenuLayout, orderSites };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

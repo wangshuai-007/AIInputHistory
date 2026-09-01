@@ -10,8 +10,9 @@
     .launcher:focus-visible,.icon-button:focus-visible,.filter:focus-visible,.item:focus-visible,input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     .launcher svg { width:18px; height:18px; }
     .panel { position:fixed; z-index:2147483647; width:min(400px,calc(100vw - 24px)); max-height:min(560px,72vh); background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:18px; box-shadow:0 22px 60px rgba(0,0,0,.42); overflow:hidden; display:flex; flex-direction:column; animation:aih-in .16s ease-out; }
+    .panel.site-menu-open { overflow:visible; }
     .hidden { display:none; } @keyframes aih-in { from { opacity:0; transform:translateY(8px) scale(.98); } }
-    .head { padding:16px 16px 12px; border-bottom:1px solid var(--line); background:linear-gradient(140deg,var(--surface),var(--bg)); }
+    .head { position:relative; z-index:2; padding:16px 16px 12px; border-bottom:1px solid var(--line); border-radius:17px 17px 0 0; background:linear-gradient(140deg,var(--surface),var(--bg)); }
     .title-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; cursor:grab; user-select:none; touch-action:none; }
     .panel.aih-dragging .title-row { cursor:grabbing; }
     .title { font-size:15px; font-weight:700; letter-spacing:.02em; } .hint { color:var(--muted); font-size:11px; margin-left:8px; }
@@ -25,7 +26,7 @@
     .site-trigger { width:100%; height:32px; border:1px solid var(--line); border-radius:9px; padding:0 8px; background:var(--surface); color:var(--text); display:flex; align-items:center; gap:7px; cursor:pointer; font-size:11px; }
     .site-trigger span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .chevron { width:14px; height:14px; margin-left:auto; flex:0 0 auto; color:var(--muted); }
-    .site-menu { position:absolute; z-index:5; top:37px; left:0; width:min(280px,calc(100vw - 56px)); max-height:230px; overflow:auto; padding:6px; border:1px solid var(--line); border-radius:12px; background:var(--bg); box-shadow:0 16px 38px rgba(0,0,0,.34); }
+    .site-menu { position:absolute; z-index:10; left:0; width:min(320px,calc(100vw - 24px)); max-height:min(420px,calc(100vh - 24px)); overflow:auto; overscroll-behavior:contain; padding:6px; border:1px solid var(--line); border-radius:12px; background:var(--bg); box-shadow:0 16px 38px rgba(0,0,0,.34); scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
     .site-option { width:100%; border:0; border-radius:9px; padding:8px; background:transparent; color:var(--text); display:flex; align-items:center; gap:9px; text-align:left; cursor:pointer; }
     .site-option:hover,.site-option.selected { background:var(--surface); }
     .site-option>span { min-width:0; display:flex; flex-direction:column; gap:2px; }
@@ -84,7 +85,7 @@
       this.siteFilter = new namespace.SiteFilter(this.shadow.querySelector(".site-filter-host"), this.site, (site) => {
         this.selectedSite = site;
         this.refresh();
-      });
+      }, (expanded) => this.panel.classList.toggle("site-menu-open", expanded));
       this.list = this.shadow.querySelector(".list");
       this.bindEvents();
       this.positionsReady = this.loadPositions();
@@ -169,6 +170,7 @@
     }
 
     close() {
+      this.siteFilter.setExpanded(false);
       this.panel.classList.add("hidden");
       this.search.value = "";
     }
@@ -226,6 +228,12 @@
       this.siteFilter.setSites(sites);
     }
 
+    async syncFromStorage() {
+      if (!this.isOpen()) return;
+      await this.loadSites();
+      await this.refresh();
+    }
+
     async loadPositions() {
       this.savedPositions = await this.store.getUiPosition(this.site);
       this.manualPositions.launcher = Boolean(this.savedPositions.launcher);
@@ -255,6 +263,7 @@
       if (!this.isOpen()) return;
       if (this.manualPositions.panel) {
         this.applyPosition("panel", this.savedPositions.panel);
+        this.siteFilter.positionMenu();
         return;
       }
       const width = Math.min(400, window.innerWidth - 24);
@@ -262,6 +271,7 @@
       const below = window.innerHeight - rect.bottom >= 260;
       const top = below ? Math.min(window.innerHeight - 180, rect.bottom + 10) : Math.max(12, rect.top - Math.min(560, window.innerHeight * .72) - 10);
       this.applyPosition("panel", { x: left, y: top });
+      this.siteFilter.positionMenu();
     }
   }
 

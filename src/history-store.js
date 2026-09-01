@@ -92,6 +92,27 @@
     });
   }
 
+  function runtimeMessage(message) {
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(message, (response) => {
+        const error = chrome.runtime.lastError;
+        if (error) reject(error);
+        else resolve(response);
+      });
+    });
+  }
+
+  async function withStorageLock(task) {
+    if (typeof chrome.runtime?.sendMessage !== "function") return task();
+    const lock = await runtimeMessage({ type: "AIH_STORAGE_LOCK_ACQUIRE" });
+    if (!lock?.token) throw new Error("无法获取本地存储写入锁");
+    try {
+      return await task();
+    } finally {
+      await runtimeMessage({ type: "AIH_STORAGE_LOCK_RELEASE", token: lock.token });
+    }
+  }
+
   function makeId() {
     if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") return globalThis.crypto.randomUUID();
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -105,10 +126,12 @@
 
     async saveSettings(nextSettings) {
       const settings = sanitizeSettings(nextSettings);
-      await storageSet({ [SETTINGS_KEY]: settings });
-      const state = await this.getState();
-      state.entries = pruneEntries(state.entries, settings);
-      await storageSet({ [STORAGE_KEY]: state });
+      await withStorageLock(async () => {
+        await storageSet({ [SETTINGS_KEY]: settings });
+        const state = await this.getState();
+        state.entries = pruneEntries(state.entries, settings);
+        await storageSet({ [STORAGE_KEY]: state });
+      });
       return settings;
     }
 
@@ -127,26 +150,30 @@
     async addEntry(text, kind, context) {
       if (!String(text || "").trim()) return null;
       const normalizedKind = kind === "enter" ? "send" : kind;
-      const [state, settings] = await Promise.all([this.getState(), this.getSettings()]);
-      const latest = state.entries
-        .filter((entry) => entry.kind === normalizedKind && entry.fieldKey === context.fieldKey)
-        .sort((left, right) => right.createdAt - left.createdAt)[0];
-      if (normalizedKind === "snapshot" && latest?.text === text) return latest;
+      return withStorageLock(async () => {
+        const [state, settings] = await Promise.all([this.getState(), this.getSettings()]);
+        const latest = state.entries
+          .filter((entry) => entry.kind === normalizedKind && entry.fieldKey === context.fieldKey)
+          .sort((left, right) => right.createdAt - left.createdAt)[0];
+        if (normalizedKind === "snapshot" && latest?.text === text) return latest;
 
-      const entry = { id: makeId(), text, kind: normalizedKind, createdAt: Date.now(), site: context.site, title: context.title, fieldKey: context.fieldKey };
-      state.entries = pruneEntries([entry, ...state.entries], settings);
-      await storageSet({ [STORAGE_KEY]: state });
-      return entry;
+        const entry = { id: makeId(), text, kind: normalizedKind, createdAt: Date.now(), site: context.site, title: context.title, fieldKey: context.fieldKey };
+        state.entries = pruneEntries([entry, ...state.entries], settings);
+        await storageSet({ [STORAGE_KEY]: state });
+        return entry;
+      });
     }
 
     async saveDraft(fieldKey, text, context) {
-      const state = await this.getState();
-      const drafts = { ...state.drafts };
-      if (String(text || "").trim()) drafts[fieldKey] = { text, updatedAt: Date.now(), site: context.site, title: context.title };
-      else delete drafts[fieldKey];
-      state.drafts = Object.fromEntries(Object.entries(drafts)
-        .sort(([, left], [, right]) => right.updatedAt - left.updatedAt).slice(0, 50));
-      await storageSet({ [STORAGE_KEY]: state });
+      await withStorageLock(async () => {
+        const state = await this.getState();
+        const drafts = { ...state.drafts };
+        if (String(text || "").trim()) drafts[fieldKey] = { text, updatedAt: Date.now(), site: context.site, title: context.title };
+        else delete drafts[fieldKey];
+        state.drafts = Object.fromEntries(Object.entries(drafts)
+          .sort(([, left], [, right]) => right.updatedAt - left.updatedAt).slice(0, 50));
+        await storageSet({ [STORAGE_KEY]: state });
+      });
     }
 
     async getHistory(query, sendOnly, site = "*") {
@@ -174,15 +201,17 @@
 
     async saveUiPosition(site, type, position) {
       if (!["launcher", "panel"].includes(type) || !Number.isFinite(position?.x) || !Number.isFinite(position?.y)) return;
-      const state = await this.getState();
-      state.positions[site] = {
-        ...(state.positions[site] || {}),
-        [type]: { x: Math.round(position.x), y: Math.round(position.y) },
-        updatedAt: Date.now()
-      };
-      state.positions = Object.fromEntries(Object.entries(state.positions)
-        .sort(([, left], [, right]) => (right.updatedAt || 0) - (left.updatedAt || 0)).slice(0, 50));
-      await storageSet({ [STORAGE_KEY]: state });
+      await withStorageLock(async () => {
+        const state = await this.getState();
+        state.positions[site] = {
+          ...(state.positions[site] || {}),
+          [type]: { x: Math.round(position.x), y: Math.round(position.y) },
+          updatedAt: Date.now()
+        };
+        state.positions = Object.fromEntries(Object.entries(state.positions)
+          .sort(([, left], [, right]) => (right.updatedAt || 0) - (left.updatedAt || 0)).slice(0, 50));
+        await storageSet({ [STORAGE_KEY]: state });
+      });
     }
 
     async getSiteIcons() {
@@ -192,16 +221,20 @@
 
     async saveSiteIcon(site, dataUrl) {
       if (!site || !/^data:image\//.test(dataUrl || "") || dataUrl.length > 180_000) return;
-      const state = await this.getState();
-      state.siteIcons[site] = { dataUrl, updatedAt: Date.now() };
-      state.siteIcons = Object.fromEntries(Object.entries(state.siteIcons)
-        .sort(([, left], [, right]) => right.updatedAt - left.updatedAt).slice(0, 100));
-      await storageSet({ [STORAGE_KEY]: state });
+      await withStorageLock(async () => {
+        const state = await this.getState();
+        state.siteIcons[site] = { dataUrl, updatedAt: Date.now() };
+        state.siteIcons = Object.fromEntries(Object.entries(state.siteIcons)
+          .sort(([, left], [, right]) => right.updatedAt - left.updatedAt).slice(0, 100));
+        await storageSet({ [STORAGE_KEY]: state });
+      });
     }
 
     async clearHistory() {
-      const state = await this.getState();
-      await storageSet({ [STORAGE_KEY]: { ...state, entries: [], drafts: {} } });
+      await withStorageLock(async () => {
+        const state = await this.getState();
+        await storageSet({ [STORAGE_KEY]: { ...state, entries: [], drafts: {} } });
+      });
     }
   }
 

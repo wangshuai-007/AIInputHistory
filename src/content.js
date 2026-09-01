@@ -22,6 +22,7 @@
   let navigationEntries = [];
   let navigationIndex = -1;
   let navigationOriginal = "";
+  let storageSyncTimer = null;
 
   const panel = new namespace.HistoryPanel(
     store,
@@ -35,9 +36,16 @@
   chrome.storage.onChanged?.addListener((changes, areaName) => {
     if (areaName !== "local") return;
     const nextSettings = changes[namespace.STORAGE_KEYS.settings]?.newValue;
-    if (!nextSettings) return;
-    panel.setLauncherEnabled(nextSettings.launcherEnabled !== false);
-    if (changes[namespace.STORAGE_KEYS.settings]?.oldValue?.snapshotSeconds !== nextSettings.snapshotSeconds) scheduleSnapshots();
+    if (nextSettings) {
+      panel.setLauncherEnabled(nextSettings.launcherEnabled !== false);
+      if (changes[namespace.STORAGE_KEYS.settings]?.oldValue?.snapshotSeconds !== nextSettings.snapshotSeconds) scheduleSnapshots();
+    }
+    if (changes[namespace.STORAGE_KEYS.state]) {
+      clearTimeout(storageSyncTimer);
+      storageSyncTimer = setTimeout(() => {
+        panel.syncFromStorage().catch((error) => console.warn("[AI 输入历史] 同步多窗口历史失败", error));
+      }, 50);
+    }
   });
   const sendDetector = new namespace.SendDetector(adapter, recordSend);
 
