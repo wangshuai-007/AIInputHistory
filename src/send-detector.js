@@ -41,10 +41,6 @@
       if (event.key !== "Enter" || event.isComposing) return;
       const text = this.adapter.getText(input);
       if (!text.trim()) return;
-      if (namespace.SiteProfiles.isSendShortcut(event, context.site)) {
-        this.emit(text, context, "keyboard-attempt");
-        return;
-      }
       const candidate = { input, text, context, done: false };
       [40, 140, 400, 900].forEach((delay, index, delays) => {
         setTimeout(() => {
@@ -54,6 +50,11 @@
           if (didComposerClear(candidate.text, current, connected)) {
             candidate.done = true;
             this.emit(candidate.text, candidate.context, "keyboard");
+          } else if (current !== candidate.text) {
+            candidate.done = true;
+          } else if (index === 0 && namespace.SiteProfiles.isSendShortcut(event, context.site)) {
+            candidate.done = true;
+            this.emit(candidate.text, candidate.context, "keyboard-attempt");
           } else if (index === delays.length - 1) {
             candidate.done = true;
           }

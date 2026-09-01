@@ -79,7 +79,8 @@ test("访问网站后优先使用页面缓存的官方图标", () => {
 });
 
 test("内置 AI 的 Enter 发送会在页面响应前识别，Shift+Enter 仍是换行", () => {
-  assert.equal(profiles.isSendShortcut({ key: "Enter", shiftKey: false, isComposing: false }, "chatgpt.com"), true);
-  assert.equal(profiles.isSendShortcut({ key: "Enter", shiftKey: true, isComposing: false }, "chatgpt.com"), false);
-  assert.equal(profiles.isSendShortcut({ key: "Enter", shiftKey: false, isComposing: false }, "custom.example"), false);
+  assert.equal(profiles.isSendShortcut({ key: "Enter", defaultPrevented: true, shiftKey: false, isComposing: false }, "chatgpt.com"), true);
+  assert.equal(profiles.isSendShortcut({ key: "Enter", defaultPrevented: false, shiftKey: false, isComposing: false }, "chatgpt.com"), false);
+  assert.equal(profiles.isSendShortcut({ key: "Enter", defaultPrevented: true, shiftKey: true, isComposing: false }, "chatgpt.com"), false);
+  assert.equal(profiles.isSendShortcut({ key: "Enter", defaultPrevented: true, shiftKey: false, isComposing: false }, "custom.example"), false);
 });

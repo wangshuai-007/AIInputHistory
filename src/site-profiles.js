@@ -107,7 +107,7 @@
   }
 
   function isSendShortcut(event, site) {
-    return Boolean(forSite(site) && event?.key === "Enter" && !event.shiftKey && !event.isComposing);
+    return Boolean(forSite(site) && event?.key === "Enter" && event.defaultPrevented && !event.shiftKey && !event.isComposing);
   }
 
   function normalizeSite(site) {

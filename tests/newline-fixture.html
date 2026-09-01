@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>Enter 换行验收页</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#eef3ef;font-family:"Segoe UI","Microsoft YaHei UI",sans-serif}main{width:680px}[contenteditable]{min-height:130px;padding:18px;border:1px solid #aebdb2;border-radius:18px;background:#fff;white-space:pre-wrap}</style></head>
+<body><main><h1>Enter 仅换行模式</h1><div contenteditable="true" role="textbox" aria-label="换行输入框"></div></main>
+  <script>
+    globalThis.__AIH_TEST_OPEN_SHADOW=true;
+    const memory={};
+    globalThis.chrome={runtime:{lastError:null},storage:{local:{get(key,callback){callback({[key]:memory[key]});},set(value,callback){Object.assign(memory,value);callback();}}}};
+  </script>
+  <script src="../src/history-store.js"></script><script src="../src/site-profiles.js"></script><script>AIInputHistory.SiteProfiles.forSite("chatgpt.com").domains.push("127.0.0.1");</script>
+  <script src="../src/site-icon.js"></script><script src="../src/input-adapter.js"></script><script src="../src/draggable.js"></script><script src="../src/send-detector.js"></script><script src="../src/site-filter.js"></script><script src="../src/theme-observer.js"></script><script src="../src/history-panel.js"></script><script src="../src/content.js"></script>
+  <script>
+    const editor=document.querySelector("[contenteditable]");
+    editor.addEventListener("keydown",(event)=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();editor.textContent+= "\n";editor.dispatchEvent(new InputEvent("input",{bubbles:true}));}});
+  </script>
+</body>
+</html>

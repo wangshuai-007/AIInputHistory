@@ -9,10 +9,11 @@ const context = {
   globalThis: {
     AIInputHistory: {
       SiteProfiles: {
-        isSendShortcut: (event, site) => site === "chatgpt.com" && event.key === "Enter" && !event.shiftKey
+        isSendShortcut: (event, site) => site === "chatgpt.com" && event.key === "Enter" && event.defaultPrevented && !event.shiftKey
       }
     }
-  }
+  },
+  setTimeout
 };
 vm.runInNewContext(source, context);
 const { didComposerClear } = context.globalThis.AIInputHistory.sendDetection;
@@ -32,10 +33,21 @@ test("空内容不会被判定为发送", () => {
   assert.equal(didComposerClear("   ", "", true), false);
 });
 
-test("内置 AI 按发送快捷键时立即记录，不等待页面响应", () => {
+test("内置 AI 拦截发送快捷键后记录，不等待页面响应", async () => {
   let emission = null;
   const detector = new SendDetector({ getText: () => "页面失败也要保存" }, (text, context, source) => { emission = { text, context, source }; });
-  detector.watchEnter({ key: "Enter", shiftKey: false, isComposing: false }, {}, { fieldKey: "chatgpt", site: "chatgpt.com" });
+  detector.watchEnter({ key: "Enter", shiftKey: false, isComposing: false, defaultPrevented: true }, { isConnected: true }, { fieldKey: "chatgpt", site: "chatgpt.com" });
+  await new Promise((resolve) => setTimeout(resolve, 60));
   assert.equal(emission.text, "页面失败也要保存");
   assert.equal(emission.source, "keyboard-attempt");
+});
+
+test("网页把 Enter 转换为换行时不记录发送", async () => {
+  let current = "第一行";
+  let emission = null;
+  const detector = new SendDetector({ getText: () => current }, (text) => { emission = text; });
+  detector.watchEnter({ key: "Enter", shiftKey: false, isComposing: false, defaultPrevented: true }, { isConnected: true }, { fieldKey: "chat", site: "chatgpt.com" });
+  current = "第一行\n";
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal(emission, null);
 });
