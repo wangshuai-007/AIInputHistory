@@ -105,6 +105,7 @@
       await store.addEntry(text, "snapshot", activeContext);
       await store.saveDraft(activeContext.fieldKey, text, activeContext);
       lastSnapshotText = text;
+      panel.showSavedFeedback();
     } catch (error) {
       console.warn("[AI 输入历史] 记录快照失败", error);
     }

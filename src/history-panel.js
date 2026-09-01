@@ -4,14 +4,25 @@
   const STYLE = `
     :host { all:initial; color-scheme:light dark; --bg:#111713; --surface:#19211c; --line:#304036; --text:#f0f5f1; --muted:#9aaba0; --accent:#7bd89b; --accent-strong:#a6efbd; font-family:"Segoe UI","Microsoft YaHei UI",sans-serif; }
     * { box-sizing:border-box; } button,input { font:inherit; }
-    .launcher { position:fixed; z-index:2147483646; width:34px; height:34px; border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line)); border-radius:11px; background:var(--bg); color:var(--accent-strong); display:grid; place-items:center; box-shadow:0 8px 26px rgba(0,0,0,.28); cursor:pointer; touch-action:none; transition:transform .16s ease,background .16s ease; }
+    .launcher { position:fixed; z-index:2147483646; width:34px; height:34px; border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line)); border-radius:11px; background:var(--bg); color:var(--accent-strong); display:grid; place-items:center; box-shadow:0 8px 26px rgba(0,0,0,.28); cursor:pointer; touch-action:none; transition:transform .16s ease,background .16s ease,border-color .16s ease; }
+    .launcher-symbol { position:absolute; display:grid; place-items:center; transition:opacity .16s ease,transform .16s ease; }
+    .launcher-check { opacity:0; transform:scale(.55) rotate(-10deg); }
+    .launcher.aih-saved { border-color:var(--accent-strong); animation:aih-save-pop .72s ease-out; }
+    .launcher.aih-saved::after { content:""; position:absolute; inset:-1px; border:2px solid var(--accent); border-radius:12px; pointer-events:none; animation:aih-save-ring .72s ease-out; }
+    .launcher.aih-saved .launcher-history { opacity:0; transform:scale(.65); }
+    .launcher.aih-saved .launcher-check { opacity:1; transform:scale(1) rotate(0); }
     .launcher:hover { transform:translateY(-2px); background:var(--surface); }
     .launcher.aih-dragging { cursor:grabbing; transform:scale(1.05); }
     .launcher:focus-visible,.icon-button:focus-visible,.filter:focus-visible,.item:focus-visible,input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     .launcher svg { width:18px; height:18px; }
     .panel { position:fixed; z-index:2147483647; width:min(400px,calc(100vw - 24px)); max-height:min(560px,72vh); background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:18px; box-shadow:0 22px 60px rgba(0,0,0,.42); overflow:hidden; display:flex; flex-direction:column; animation:aih-in .16s ease-out; }
     .panel.site-menu-open { overflow:visible; }
-    .hidden { display:none; } @keyframes aih-in { from { opacity:0; transform:translateY(8px) scale(.98); } }
+    .hidden { display:none; } .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    @keyframes aih-in { from { opacity:0; transform:translateY(8px) scale(.98); } }
+    @keyframes aih-save-pop { 0%,100% { transform:scale(1); } 38% { transform:scale(1.14); background:var(--surface); } }
+    @keyframes aih-save-ring { 0% { opacity:.9; transform:scale(.82); } 100% { opacity:0; transform:scale(1.55); } }
+    @keyframes aih-panel-saved { 0%,100% { box-shadow:0 22px 60px rgba(0,0,0,.42); } 35% { box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 55%,transparent),0 22px 60px rgba(0,0,0,.42); } }
+    .panel.aih-saved { animation:aih-panel-saved .72s ease-out; }
     .head { position:relative; z-index:2; padding:16px 16px 12px; border-bottom:1px solid var(--line); border-radius:17px 17px 0 0; background:linear-gradient(140deg,var(--surface),var(--bg)); }
     .title-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; cursor:grab; user-select:none; touch-action:none; }
     .panel.aih-dragging .title-row { cursor:grabbing; }
@@ -57,7 +68,7 @@
     :host([data-theme="dark"]) .search { background:#0d120f; } :host([data-theme="dark"]) .filter.active,:host([data-theme="dark"]) .badge { color:#0c1710; }
     :host([data-theme="light"]) { --bg:#fbfdfb; --surface:#edf4ef; --line:#cbd9cf; --text:#17221a; --muted:#66766b; --accent:#2f8f53; --accent-strong:#287b48; }
     :host([data-theme="light"]) .search { background:#fff; } :host([data-theme="light"]) .filter.active,:host([data-theme="light"]) .badge { color:#fff; }
-    @media (prefers-reduced-motion:reduce) { * { animation:none!important; transition:none!important; } }
+    @media (prefers-reduced-motion:reduce) { * { animation:none!important; transition:none!important; } .launcher.aih-saved .launcher-history { opacity:0; } .launcher.aih-saved .launcher-check { opacity:1; transform:none; } }
   `;
 
   class HistoryPanel {
@@ -87,13 +98,16 @@
         this.refresh();
       }, (expanded) => this.panel.classList.toggle("site-menu-open", expanded));
       this.list = this.shadow.querySelector(".list");
+      this.savedStatus = this.shadow.querySelector(".saved-status");
       this.bindEvents();
       this.positionsReady = this.loadPositions();
     }
 
     markup() {
       return `<button class="launcher hidden" type="button" aria-label="打开输入历史；长按移动；右键隐藏" title="点击打开 · 长按移动 · 右键隐藏">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h11M4 12h11M4 17h7M18 15v6m-3-3h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span class="launcher-symbol launcher-history"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h11M4 12h11M4 17h7M18 15v6m-3-3h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+        <span class="launcher-symbol launcher-check"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 12 4 4 8-9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="saved-status sr-only" aria-live="polite"></span>
       </button>
       <section class="panel hidden" role="dialog" aria-label="输入历史">
         <header class="head"><div class="title-row"><div><span class="title">输入历史</span><span class="hint">拖动标题移动</span></div><div class="actions">
@@ -151,6 +165,22 @@
     setLauncherEnabled(enabled) {
       this.launcherEnabled = enabled;
       this.launcher.classList.toggle("hidden", !enabled || !this.target);
+    }
+
+    showSavedFeedback() {
+      if (!this.launcherEnabled && !this.isOpen()) return;
+      clearTimeout(this.savedFeedbackTimer);
+      this.launcher.classList.remove("aih-saved");
+      this.panel.classList.remove("aih-saved");
+      void this.launcher.offsetWidth;
+      if (this.launcherEnabled && this.target) this.launcher.classList.add("aih-saved");
+      if (this.isOpen()) this.panel.classList.add("aih-saved");
+      this.savedStatus.textContent = "";
+      requestAnimationFrame(() => { this.savedStatus.textContent = "自动快照已保存"; });
+      this.savedFeedbackTimer = setTimeout(() => {
+        this.launcher.classList.remove("aih-saved");
+        this.panel.classList.remove("aih-saved");
+      }, 850);
     }
 
     async disableLauncher() {
