@@ -1,0 +1,19 @@
+# Dependencies and generated packages
+node_modules/
+*.zip
+*.crx
+*.pem
+
+# Local HelloAGENTS session state
+.helloagents/sessions/
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+tmp/
+temp/

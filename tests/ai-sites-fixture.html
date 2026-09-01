@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Copilot Perplexity Kimi 豆包兼容验收页</title>
+  <style>
+    body { margin:0; padding:36px; background:#eef3ef; color:#18231b; font-family:"Segoe UI","Microsoft YaHei UI",sans-serif; }
+    main { width:min(920px,100%); margin:auto; } h1 { margin:0 0 24px; font-size:25px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; } section,.copilot-card { padding:18px; border:1px solid #cad6cd; border-radius:18px; background:#fff; }
+    h2 { margin:0 0 12px; font-size:15px; } .composer { position:relative; }
+    textarea,[contenteditable="true"] { width:100%; min-height:82px; padding:13px 50px 13px 13px; border:1px solid #aebdb2; border-radius:14px; outline:0; font:14px/1.5 inherit; }
+    button.send { position:absolute; right:9px; bottom:9px; width:34px; height:34px; border:0; border-radius:10px; background:#278a4c; color:#fff; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <main><h1>四站点输入框兼容验收</h1><div class="grid">
+    <copilot-composer></copilot-composer>
+    <section><h2>Perplexity</h2><div class="composer"><textarea aria-label="Ask Perplexity" placeholder="Ask anything"></textarea><button class="send" data-testid="submit-button" aria-label="Submit">↑</button></div></section>
+    <section><h2>Kimi</h2><div class="composer"><div contenteditable="true" role="textbox" data-slate-editor="true" aria-label="Ask Kimi"></div><button class="send send-button" data-testid="send-button" aria-label="Send">↑</button></div></section>
+    <section><h2>豆包</h2><div class="composer"><div contenteditable="true" role="textbox" data-slate-editor="true" data-testid="chat-input" aria-label="给豆包发送消息"></div><button class="send send-btn" data-testid="send-message" aria-label="发送">↑</button></div></section>
+  </div></main>
+  <script>
+    class CopilotComposer extends HTMLElement {
+      connectedCallback() {
+        const root = this.attachShadow({ mode:"open" });
+        root.innerHTML = `<style>.copilot-card{padding:18px;border:1px solid #cad6cd;border-radius:18px;background:#fff;font-family:Segoe UI,sans-serif}h2{margin:0 0 12px;font-size:15px}.composer{position:relative}textarea{box-sizing:border-box;width:100%;min-height:82px;padding:13px 50px 13px 13px;border:1px solid #aebdb2;border-radius:14px;font:14px/1.5 inherit}button{position:absolute;right:9px;bottom:9px;width:34px;height:34px;border:0;border-radius:10px;background:#278a4c;color:#fff}</style><section class="copilot-card"><h2>Copilot（开放 Shadow DOM）</h2><div class="composer"><textarea id="userInput" aria-label="Message Copilot" placeholder="Message Copilot"></textarea><button data-testid="submit-button" aria-label="Submit message">↑</button></div></section>`;
+      }
+    }
+    customElements.define("copilot-composer", CopilotComposer);
+    const memory = { aiInputHistorySettings: { historyLimit:100, sendLimit:10, snapshotMinutes:1, launcherEnabled:true, customDomains:["127.0.0.1"] } };
+    globalThis.chrome = { runtime:{ lastError:null }, storage:{ local:{ get(key, callback){ callback({[key]:memory[key]}); }, set(value, callback){ Object.assign(memory,value); callback(); } } } };
+  </script>
+  <script src="../src/history-store.js"></script><script src="../src/site-profiles.js"></script><script src="../src/site-icon.js"></script><script src="../src/input-adapter.js"></script>
+  <script src="../src/draggable.js"></script><script src="../src/send-detector.js"></script><script src="../src/site-filter.js"></script><script src="../src/history-panel.js"></script><script src="../src/content.js"></script>
+  <script>
+    const pairs = [
+      [document.querySelector("copilot-composer").shadowRoot.querySelector("textarea"), document.querySelector("copilot-composer").shadowRoot.querySelector("button")],
+      [document.querySelector("textarea[aria-label='Ask Perplexity']"), document.querySelector("button[aria-label='Submit']")],
+      [document.querySelector("[aria-label='Ask Kimi']"), document.querySelector("button[aria-label='Send']")],
+      [document.querySelector("[aria-label='给豆包发送消息']"), document.querySelector("button[aria-label='发送']")]
+    ];
+    pairs.forEach(([editor, button]) => {
+      editor.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); button.click(); } });
+      button.addEventListener("click", () => {
+        if ("value" in editor) editor.value = ""; else editor.replaceChildren();
+        editor.dispatchEvent(new InputEvent("input", { bubbles:true, composed:true }));
+      });
+    });
+  </script>
+</body>
+</html>

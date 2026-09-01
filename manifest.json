@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "AI 输入历史",
+  "version": "1.9.0",
+  "description": "在各类 AI 聊天网站本地保存输入草稿与发送前内容，并提供搜索和快捷切换。",
+  "permissions": ["storage"],
+  "action": {
+    "default_title": "AI 输入历史",
+    "default_popup": "popup/index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "src/history-store.js",
+        "src/site-profiles.js",
+        "src/site-icon.js",
+        "src/input-adapter.js",
+        "src/draggable.js",
+        "src/send-detector.js",
+        "src/site-filter.js",
+        "src/history-panel.js",
+        "src/content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/logos/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

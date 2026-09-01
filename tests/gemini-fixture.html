@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Gemini 兼容验收页</title>
+  <style>
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#f2f6ff; color:#263252; font-family:"Segoe UI","Microsoft YaHei UI",sans-serif; }
+    main { width:min(820px,calc(100vw - 40px)); } h1 { font-size:26px; margin:0 0 22px; }
+    .restore-test { margin-top:18px; border:1px solid #b7c5e5; border-radius:10px; padding:8px 12px; background:#fff; color:#263252; cursor:pointer; }
+    rich-textarea { position:relative; display:block; padding:12px 58px 12px 18px; border:1px solid #c9d4ec; border-radius:28px; background:#fff; box-shadow:0 18px 45px rgba(58,78,130,.12); }
+    .ql-editor { min-height:80px; outline:0; white-space:pre-wrap; line-height:1.55; }
+    .ql-editor:empty::before { content:attr(data-placeholder); color:#7b8499; }
+    .send-button { position:absolute; right:12px; bottom:12px; width:38px; height:38px; border:0; border-radius:50%; background:#376ee6; color:#fff; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <main><h1>Gemini 输入框仿真</h1><rich-textarea>
+    <div class="ql-editor textarea" contenteditable="true" role="textbox" aria-label="Enter a prompt here" data-placeholder="Ask Gemini"></div>
+    <button class="send-button" type="button" aria-label="Send message"><svg viewBox="0 0 24 24" width="18" aria-hidden="true"><path d="m12 4 7 8h-4v8H9v-8H5z" fill="currentColor"/></svg></button>
+  </rich-textarea><button class="restore-test" type="button">模拟恢复历史</button></main>
+  <script>
+    const memory = { aiInputHistorySettings: { historyLimit:100, sendLimit:10, snapshotMinutes:1, launcherEnabled:true, customDomains:["127.0.0.1"] } };
+    globalThis.chrome = {
+      runtime: { lastError: null },
+      storage: { local: {
+        get(key, callback) { callback({ [key]: memory[key] }); },
+        set(value, callback) { Object.assign(memory, value); callback(); }
+      } }
+    };
+  </script>
+  <script src="../src/history-store.js"></script>
+  <script src="../src/site-profiles.js"></script>
+  <script src="../src/site-icon.js"></script>
+  <script src="../src/input-adapter.js"></script>
+  <script src="../src/draggable.js"></script>
+  <script src="../src/send-detector.js"></script>
+  <script src="../src/site-filter.js"></script>
+  <script src="../src/history-panel.js"></script>
+  <script src="../src/content.js"></script>
+  <script>
+    const editor = document.querySelector(".ql-editor");
+    const send = document.querySelector(".send-button");
+    document.querySelector(".restore-test").addEventListener("click", () => {
+      globalThis.AIInputHistory.InputAdapter.setText(editor, "Gemini 历史恢复内容");
+    });
+    editor.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        send.click();
+      }
+    });
+    send.addEventListener("click", () => {
+      editor.replaceChildren();
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    });
+  </script>
+</body>
+</html>

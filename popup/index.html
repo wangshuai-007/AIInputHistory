@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI 输入历史</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div class="mark" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div><h1>AI 输入历史</h1><p>仅保存在这台浏览器中</p></div>
+    </header>
+    <section class="summary" aria-label="存储摘要">
+      <div><strong id="totalCount">—</strong><span>历史记录</span></div>
+      <div><strong id="sendCount">—</strong><span>发送记录</span></div>
+      <div><strong id="draftCount">—</strong><span>未发送草稿</span></div>
+    </section>
+    <section class="settings">
+      <h2>记录设置</h2>
+      <label><span>历史上限<small>最近输入，按时间倒序</small></span><input id="historyLimit" type="number" min="20" max="500" step="10"></label>
+      <label><span>发送记录上限<small>确认实际发送前的内容</small></span><input id="sendLimit" type="number" min="1" max="50"></label>
+      <label><span>自动快照间隔<small>单位：分钟</small></span><input id="snapshotMinutes" type="number" min="1" max="30"></label>
+      <div class="setting-row"><span>显示悬浮按钮<small>右键隐藏后可在这里重新打开</small></span><label class="switch"><input id="launcherEnabled" type="checkbox"><span aria-hidden="true"></span></label></div>
+      <div class="shortcut"><span>打开历史<small>在聊天输入框内使用</small></span><kbd>Ctrl</kbd><i>+</i><kbd>R</kbd></div>
+    </section>
+    <section class="domains">
+      <h2>自定义追踪域名</h2>
+      <p>默认只追踪内置 AI 网站。添加域名后，刷新该网站即可启用。</p>
+      <form id="domainForm"><input id="domainInput" type="text" inputmode="url" autocomplete="off" placeholder="例如：ai.example.com" aria-label="自定义域名"><button type="submit">添加</button></form>
+      <div id="domainList" class="domain-list"></div>
+    </section>
+    <div id="status" role="status" aria-live="polite"></div>
+    <footer><button id="clear" type="button">清空本地记录</button><span>v1.9.0</span></footer>
+  </main>
+  <script src="../src/history-store.js"></script>
+  <script src="../src/site-profiles.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

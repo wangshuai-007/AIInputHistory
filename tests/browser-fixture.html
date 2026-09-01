@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>AI 输入历史浏览器验收页</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%232f8f53'/%3E%3Cpath d='M9 16h14M16 9v14' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+  <style>
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#e8eee9; color:#17221a; font-family:"Segoe UI","Microsoft YaHei UI",sans-serif; }
+    main { width:min(760px,calc(100vw - 40px)); padding:32px; border:1px solid #c5d2c9; border-radius:24px; background:#f9fcfa; box-shadow:0 24px 70px rgba(30,50,36,.12); }
+    h1 { margin:0 0 8px; font-size:25px; } p { color:#637269; margin:0 0 28px; }
+    form { position:relative; } textarea { width:100%; min-height:140px; resize:vertical; padding:18px 54px 18px 18px; border:1px solid #aebeb3; border-radius:17px; background:#fff; color:#17221a; font:15px/1.55 inherit; }
+    form>button { position:absolute; right:12px; bottom:12px; width:38px; height:38px; border:0; border-radius:12px; background:#2f8f53; color:#fff; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>测试 AI 对话</h1>
+    <p>聚焦下方输入框，验证草稿记录、发送识别、可移动悬浮按钮和历史搜索。</p>
+    <form><textarea aria-label="发送消息" placeholder="输入消息并按 Enter 发送"></textarea><button type="submit" aria-label="发送消息">发送</button></form>
+  </main>
+  <script>
+    globalThis.__AIH_TEST_OPEN_SHADOW = true;
+    const memory = globalThis.__testMemory = {
+      aiInputHistorySettings: { historyLimit:100, sendLimit:10, snapshotMinutes:1, launcherEnabled:true, customDomains:["127.0.0.1"] },
+      aiInputHistoryState: {
+        entries: [
+          { id:"gemini", text:"Gemini 历史", kind:"send", createdAt:4, site:"gemini.google.com", fieldKey:"gemini" },
+          { id:"grok", text:"Grok 历史", kind:"send", createdAt:3, site:"grok.com", fieldKey:"grok" },
+          { id:"glm", text:"GLM 历史", kind:"send", createdAt:2, site:"chat.z.ai", fieldKey:"glm" },
+          { id:"qwen", text:"Qwen 历史", kind:"send", createdAt:1, site:"chat.qwen.ai", fieldKey:"qwen" }
+        ],
+        drafts: {},
+        positions: {}
+      }
+    };
+    globalThis.chrome = {
+      runtime: { lastError: null },
+      storage: { local: {
+        get(key, callback) { callback({ [key]: memory[key] }); },
+        set(value, callback) { Object.assign(memory, value); callback(); }
+      } }
+    };
+  </script>
+  <script src="../src/history-store.js"></script>
+  <script src="../src/site-profiles.js"></script>
+  <script src="../src/site-icon.js"></script>
+  <script src="../src/input-adapter.js"></script>
+  <script src="../src/draggable.js"></script>
+  <script src="../src/send-detector.js"></script>
+  <script src="../src/site-filter.js"></script>
+  <script src="../src/history-panel.js"></script>
+  <script src="../src/content.js"></script>
+  <script>
+    const composer = document.querySelector("textarea");
+    const form = document.querySelector("form");
+    composer.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        form.requestSubmit();
+      }
+    });
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      composer.value = "";
+      composer.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    });
+  </script>
+</body>
+</html>
