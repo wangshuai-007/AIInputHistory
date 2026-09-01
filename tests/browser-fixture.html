@@ -10,13 +10,14 @@
     h1 { margin:0 0 8px; font-size:25px; } p { color:#637269; margin:0 0 28px; }
     form { position:relative; } textarea { width:100%; min-height:140px; resize:vertical; padding:18px 54px 18px 18px; border:1px solid #aebeb3; border-radius:17px; background:#fff; color:#17221a; font:15px/1.55 inherit; }
     form>button { position:absolute; right:12px; bottom:12px; width:38px; height:38px; border:0; border-radius:12px; background:#2f8f53; color:#fff; cursor:pointer; }
+    .restore-launcher { margin-top:14px; border:1px solid #aebeb3; border-radius:9px; padding:7px 10px; background:#fff; cursor:pointer; }
   </style>
 </head>
 <body>
   <main>
     <h1>测试 AI 对话</h1>
     <p>聚焦下方输入框，验证草稿记录、发送识别、可移动悬浮按钮和历史搜索。</p>
-    <form><textarea aria-label="发送消息" placeholder="输入消息并按 Enter 发送"></textarea><button type="submit" aria-label="发送消息">发送</button></form>
+    <form><textarea aria-label="发送消息" placeholder="输入消息并按 Enter 发送"></textarea><button type="submit" aria-label="发送消息">发送</button></form><button class="restore-launcher" type="button">设置中开启悬浮按钮</button>
   </main>
   <script>
     globalThis.__AIH_TEST_OPEN_SHADOW = true;
@@ -33,11 +34,17 @@
         positions: {}
       }
     };
+    const storageListeners = [];
     globalThis.chrome = {
       runtime: { lastError: null },
-      storage: { local: {
+      storage: { onChanged: { addListener(listener) { storageListeners.push(listener); } }, local: {
         get(key, callback) { callback({ [key]: memory[key] }); },
-        set(value, callback) { Object.assign(memory, value); callback(); }
+        set(value, callback) {
+          const changes = Object.fromEntries(Object.entries(value).map(([key, newValue]) => [key, { oldValue: memory[key], newValue }]));
+          Object.assign(memory, value);
+          storageListeners.forEach((listener) => listener(changes, "local"));
+          callback();
+        }
       } }
     };
   </script>
@@ -63,6 +70,11 @@
       event.preventDefault();
       composer.value = "";
       composer.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    });
+    document.querySelector(".restore-launcher").addEventListener("click", async () => {
+      const store = new AIInputHistory.HistoryStore();
+      const settings = await store.getSettings();
+      await store.saveSettings({ ...settings, launcherEnabled: true });
     });
   </script>
 </body>

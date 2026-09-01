@@ -31,6 +31,11 @@
     }
   );
   panel.setLauncherEnabled(settings.launcherEnabled);
+  chrome.storage.onChanged?.addListener((changes, areaName) => {
+    if (areaName !== "local") return;
+    const nextSettings = changes[namespace.STORAGE_KEYS.settings]?.newValue;
+    if (nextSettings) panel.setLauncherEnabled(nextSettings.launcherEnabled !== false);
+  });
   const sendDetector = new namespace.SendDetector(adapter, recordSend);
 
   document.addEventListener("focusin", handleFocus, true);

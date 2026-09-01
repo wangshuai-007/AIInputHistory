@@ -206,5 +206,6 @@
 
   namespace.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
   namespace.HistoryStore = HistoryStore;
+  namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY };
   namespace.historyModel = { filterEntries, normalizeDomain, pruneEntries, sanitizeSettings };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

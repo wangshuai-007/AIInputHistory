@@ -15,7 +15,7 @@
     input.addEventListener("change", () => persistSettings("设置已保存，刷新页面后生效"));
   });
   launcherToggle.checked = settings.launcherEnabled;
-  launcherToggle.addEventListener("change", () => persistSettings(launcherToggle.checked ? "悬浮按钮已开启，刷新页面后显示" : "悬浮按钮已关闭"));
+  launcherToggle.addEventListener("change", () => persistSettings(launcherToggle.checked ? "悬浮按钮已立即开启" : "悬浮按钮已立即关闭"));
   document.querySelector("#domainForm").addEventListener("submit", addDomain);
   document.querySelector("#clear").addEventListener("click", clearHistory);
   renderStats(state);
