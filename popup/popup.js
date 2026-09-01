@@ -2,7 +2,7 @@
   "use strict";
 
   const store = new namespace.HistoryStore();
-  const numericFields = ["historyLimit", "sendLimit", "snapshotMinutes"];
+  const numericFields = ["historyLimit", "sendLimit", "snapshotSeconds"];
   const status = document.querySelector("#status");
   const launcherToggle = document.querySelector("#launcherEnabled");
   const domainInput = document.querySelector("#domainInput");
@@ -12,7 +12,7 @@
   numericFields.forEach((name) => {
     const input = document.querySelector(`#${name}`);
     input.value = settings[name];
-    input.addEventListener("change", () => persistSettings("设置已保存，刷新页面后生效"));
+    input.addEventListener("change", () => persistSettings("设置已保存并立即生效"));
   });
   launcherToggle.checked = settings.launcherEnabled;
   launcherToggle.addEventListener("change", () => persistSettings(launcherToggle.checked ? "悬浮按钮已立即开启" : "悬浮按钮已立即关闭"));

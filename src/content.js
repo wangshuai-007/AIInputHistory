@@ -18,6 +18,7 @@
   let activeContext = null;
   let draftTimer = null;
   let snapshotTimer = null;
+  let lastSnapshotText = "";
   let navigationEntries = [];
   let navigationIndex = -1;
   let navigationOriginal = "";
@@ -34,7 +35,9 @@
   chrome.storage.onChanged?.addListener((changes, areaName) => {
     if (areaName !== "local") return;
     const nextSettings = changes[namespace.STORAGE_KEYS.settings]?.newValue;
-    if (nextSettings) panel.setLauncherEnabled(nextSettings.launcherEnabled !== false);
+    if (!nextSettings) return;
+    panel.setLauncherEnabled(nextSettings.launcherEnabled !== false);
+    if (changes[namespace.STORAGE_KEYS.settings]?.oldValue?.snapshotSeconds !== nextSettings.snapshotSeconds) scheduleSnapshots();
   });
   const sendDetector = new namespace.SendDetector(adapter, recordSend);
 
@@ -71,6 +74,7 @@
 
   function handleInput(event) {
     if (adapter.resolveEventEditable(event) !== activeInput) return;
+    if (!adapter.getText(activeInput).trim()) lastSnapshotText = "";
     navigationIndex = -1;
     clearTimeout(draftTimer);
     draftTimer = setTimeout(saveDraft, 500);
@@ -88,9 +92,11 @@
   async function recordSnapshot() {
     if (!activeInput || !activeContext) return;
     const text = adapter.getText(activeInput);
+    if (!text.trim() || text === lastSnapshotText) return;
     try {
       await store.addEntry(text, "snapshot", activeContext);
       await store.saveDraft(activeContext.fieldKey, text, activeContext);
+      lastSnapshotText = text;
     } catch (error) {
       console.warn("[AI 输入历史] 记录快照失败", error);
     }
@@ -183,7 +189,7 @@
   async function scheduleSnapshots() {
     clearInterval(snapshotTimer);
     const settings = await store.getSettings();
-    snapshotTimer = setInterval(recordSnapshot, settings.snapshotMinutes * 60_000);
+    snapshotTimer = setInterval(recordSnapshot, settings.snapshotSeconds * 1_000);
   }
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {}).catch((error) => {
   console.warn("[AI 输入历史] 初始化失败", error);

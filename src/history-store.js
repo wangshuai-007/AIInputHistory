@@ -6,7 +6,7 @@
   const DEFAULT_SETTINGS = Object.freeze({
     historyLimit: 100,
     sendLimit: 10,
-    snapshotMinutes: 1,
+    snapshotSeconds: 60,
     shortcut: "Ctrl+R",
     launcherEnabled: true,
     customDomains: []
@@ -14,10 +14,11 @@
 
   function sanitizeSettings(value) {
     const source = value && typeof value === "object" ? value : {};
+    const snapshotSeconds = source.snapshotSeconds ?? (Number.parseInt(source.snapshotMinutes, 10) * 60 || DEFAULT_SETTINGS.snapshotSeconds);
     return {
       historyLimit: clampInteger(source.historyLimit, 20, 500, DEFAULT_SETTINGS.historyLimit),
       sendLimit: clampInteger(source.sendLimit ?? source.enterLimit, 1, 50, DEFAULT_SETTINGS.sendLimit),
-      snapshotMinutes: clampInteger(source.snapshotMinutes, 1, 30, DEFAULT_SETTINGS.snapshotMinutes),
+      snapshotSeconds: clampInteger(snapshotSeconds, 1, 3600, DEFAULT_SETTINGS.snapshotSeconds),
       shortcut: DEFAULT_SETTINGS.shortcut,
       launcherEnabled: source.launcherEnabled !== false,
       customDomains: [...new Set((Array.isArray(source.customDomains) ? source.customDomains : [])

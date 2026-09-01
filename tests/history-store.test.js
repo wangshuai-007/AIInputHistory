@@ -40,7 +40,8 @@ test("历史记录可按网站过滤", () => {
 
 test("设置值被限制在安全范围", () => {
   const settings = sanitizeSettings({ historyLimit: 9999, enterLimit: 0, snapshotMinutes: "5" });
-  assert.deepEqual(JSON.parse(JSON.stringify(settings)), { historyLimit: 500, sendLimit: 1, snapshotMinutes: 5, shortcut: "Ctrl+R", launcherEnabled: true, customDomains: [] });
+  assert.deepEqual(JSON.parse(JSON.stringify(settings)), { historyLimit: 500, sendLimit: 1, snapshotSeconds: 300, shortcut: "Ctrl+R", launcherEnabled: true, customDomains: [] });
+  assert.equal(sanitizeSettings({ snapshotSeconds: 5 }).snapshotSeconds, 5);
 });
 
 test("自定义域名会被规范化并去重", () => {

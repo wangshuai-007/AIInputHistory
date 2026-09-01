@@ -7,7 +7,7 @@
 - 默认只在内置 AI 网站启用；可在扩展设置中添加自定义域名，启用该网站的 `textarea`、`contenteditable` 和聊天文本框追踪。
 - 内置 Gemini、Grok、GLM、Qwen、ChatGPT、Claude、Google AI Studio、DeepSeek、Copilot、Perplexity、Kimi、豆包、腾讯元宝、文小言、Mistral、Poe、Meta AI 和 You.com 的站点识别与本地品牌图标资源，并增强常见富文本输入框和发送按钮识别。
 - Copilot、Perplexity、Kimi、豆包包含独立的输入框与发送按钮选择器；支持 Copilot 开放 Shadow DOM、Kimi/豆包 Slate 富文本编辑器及 Perplexity 问答输入框。
-- 输入时持续保存当前草稿，每 1 分钟形成一次历史快照；内容未变化时不会重复写入。
+- 输入时持续保存当前草稿，自动快照间隔按秒配置（默认 60 秒，范围 1–3600 秒）；内容未变化时不会重复写入。
 - 根据页面的真实提交行为识别发送：表单提交、发送按钮点击或 Enter 后输入框实际清空才会记录；Shift+Enter 等换行不会误标记。
 - 对内置 AI 网站，按下明确的发送快捷键时会先记录发送内容，再交给网页处理；即使 ChatGPT 页面请求失败、没有返回回答或输入框未清空，提示词也不会丢失。自定义域名仍使用页面实际清空/提交行为判定，避免把换行误记为发送。
 - 全部历史默认保留最近 100 条，带 Enter 图标的发送记录默认最多保留 10 条。

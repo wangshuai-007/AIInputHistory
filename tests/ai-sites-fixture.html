@@ -27,7 +27,7 @@
       }
     }
     customElements.define("copilot-composer", CopilotComposer);
-    const memory = { aiInputHistorySettings: { historyLimit:100, sendLimit:10, snapshotMinutes:1, launcherEnabled:true, customDomains:["127.0.0.1"] } };
+    const memory = { aiInputHistorySettings: { historyLimit:100, sendLimit:10, snapshotSeconds:60, launcherEnabled:true, customDomains:["127.0.0.1"] } };
     globalThis.chrome = { runtime:{ lastError:null }, storage:{ local:{ get(key, callback){ callback({[key]:memory[key]}); }, set(value, callback){ Object.assign(memory,value); callback(); } } } };
   </script>
   <script src="../src/history-store.js"></script><script src="../src/site-profiles.js"></script><script src="../src/site-icon.js"></script><script src="../src/input-adapter.js"></script>

@@ -19,7 +19,7 @@
     <button class="send-button" type="button" aria-label="Send message"><svg viewBox="0 0 24 24" width="18" aria-hidden="true"><path d="m12 4 7 8h-4v8H9v-8H5z" fill="currentColor"/></svg></button>
   </rich-textarea><button class="restore-test" type="button">模拟恢复历史</button></main>
   <script>
-    const memory = { aiInputHistorySettings: { historyLimit:100, sendLimit:10, snapshotMinutes:1, launcherEnabled:true, customDomains:["127.0.0.1"] } };
+    const memory = { aiInputHistorySettings: { historyLimit:100, sendLimit:10, snapshotSeconds:60, launcherEnabled:true, customDomains:["127.0.0.1"] } };
     globalThis.chrome = {
       runtime: { lastError: null },
       storage: { local: {

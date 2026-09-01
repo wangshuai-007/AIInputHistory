@@ -22,7 +22,7 @@
   <script>
     globalThis.__AIH_TEST_OPEN_SHADOW = true;
     const memory = globalThis.__testMemory = {
-      aiInputHistorySettings: { historyLimit:100, sendLimit:10, snapshotMinutes:1, launcherEnabled:true, customDomains:["127.0.0.1"] },
+      aiInputHistorySettings: { historyLimit:100, sendLimit:10, snapshotSeconds:60, launcherEnabled:true, customDomains:["127.0.0.1"] },
       aiInputHistoryState: {
         entries: [
           { id:"gemini", text:"Gemini 历史", kind:"send", createdAt:4, site:"gemini.google.com", fieldKey:"gemini" },

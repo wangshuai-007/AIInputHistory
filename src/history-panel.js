@@ -187,7 +187,7 @@
     render() {
       this.shadow.querySelector(".count").textContent = `${this.items.length} 条`;
       if (!this.items.length) {
-        this.list.innerHTML = `<div class="empty">暂无匹配记录<br>输入内容每分钟保存，确认实际发送后会特殊标记。</div>`;
+        this.list.innerHTML = `<div class="empty">暂无匹配记录<br>输入内容按设置的秒数保存，确认实际发送后会特殊标记。</div>`;
         return;
       }
       this.list.innerHTML = this.items.map((entry, index) => `<button class="item ${index === this.selectedIndex ? "selected" : ""}" type="button" role="option" aria-selected="${index === this.selectedIndex}" data-index="${index}">
