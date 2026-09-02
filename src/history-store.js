@@ -68,6 +68,12 @@
       .filter((entry) => !keyword || entry.text.toLocaleLowerCase().includes(keyword));
   }
 
+  /** Returns the newest automatic snapshot timestamp, optionally scoped to one site. */
+  function latestSnapshotTime(entries, site = "*") {
+    return entries.filter((entry) => entry?.kind === "snapshot" && (site === "*" || entry.site === site))
+      .reduce((latest, entry) => Math.max(latest, Number(entry.createdAt) || 0), 0);
+  }
+
   function initialState() {
     return { entries: [], drafts: {}, positions: {}, siteIcons: {} };
   }
@@ -241,5 +247,5 @@
   namespace.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
   namespace.HistoryStore = HistoryStore;
   namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY };
-  namespace.historyModel = { filterEntries, normalizeDomain, pruneEntries, sanitizeSettings };
+  namespace.historyModel = { filterEntries, latestSnapshotTime, normalizeDomain, pruneEntries, sanitizeSettings };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

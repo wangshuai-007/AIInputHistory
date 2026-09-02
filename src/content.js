@@ -41,6 +41,7 @@
       if (changes[namespace.STORAGE_KEYS.settings]?.oldValue?.snapshotSeconds !== nextSettings.snapshotSeconds) scheduleSnapshots();
     }
     if (changes[namespace.STORAGE_KEYS.state]) {
+      panel.syncLastSavedTime(changes[namespace.STORAGE_KEYS.state].newValue);
       clearTimeout(storageSyncTimer);
       storageSyncTimer = setTimeout(() => {
         panel.syncFromStorage().catch((error) => console.warn("[AI 输入历史] 同步多窗口历史失败", error));
@@ -102,10 +103,10 @@
     const text = adapter.getText(activeInput);
     if (!text.trim() || text === lastSnapshotText) return;
     try {
-      await store.addEntry(text, "snapshot", activeContext);
+      const entry = await store.addEntry(text, "snapshot", activeContext);
       await store.saveDraft(activeContext.fieldKey, text, activeContext);
       lastSnapshotText = text;
-      panel.showSavedFeedback();
+      panel.showSavedFeedback(entry?.createdAt);
     } catch (error) {
       console.warn("[AI 输入历史] 记录快照失败", error);
     }

@@ -24,6 +24,7 @@ test("自动快照保存反馈可重复触发并在结束后复位", () => {
     requestAnimationFrame(callback) { callback(); }
   };
   vm.runInNewContext(source, context);
+  const panelPrototype = context.globalThis.AIInputHistory.HistoryPanel.prototype;
   const launcherClasses = classList();
   const panelClasses = classList();
   const instance = {
@@ -32,13 +33,16 @@ test("自动快照保存反馈可重复触发并在结束后复位", () => {
     launcher: { classList: launcherClasses, offsetWidth: 34 },
     panel: { classList: panelClasses },
     savedStatus: { textContent: "" },
+    launcherTooltip: { textContent: "" },
+    setLastSavedAt: panelPrototype.setLastSavedAt,
     isOpen: () => true
   };
 
-  context.globalThis.AIInputHistory.HistoryPanel.prototype.showSavedFeedback.call(instance);
+  panelPrototype.showSavedFeedback.call(instance, Date.now());
   assert.equal(launcherClasses.contains("aih-saved"), true);
   assert.equal(panelClasses.contains("aih-saved"), true);
   assert.equal(instance.savedStatus.textContent, "自动快照已保存");
+  assert.match(instance.launcherTooltip.textContent, /^上次自动保存：今天 /);
 
   finishAnimation();
   assert.equal(launcherClasses.contains("aih-saved"), false);

@@ -11,6 +11,9 @@
     .launcher.aih-saved::after { content:""; position:absolute; inset:-1px; border:2px solid var(--accent); border-radius:12px; pointer-events:none; animation:aih-save-ring .72s ease-out; }
     .launcher.aih-saved .launcher-history { opacity:0; transform:scale(.65); }
     .launcher.aih-saved .launcher-check { opacity:1; transform:scale(1) rotate(0); }
+    .launcher-tooltip { position:absolute; z-index:2; left:calc(100% + 9px); top:50%; width:max-content; max-width:min(240px,calc(100vw - 58px)); padding:7px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); color:var(--text); box-shadow:0 8px 24px rgba(0,0,0,.3); font-size:11px; line-height:1.35; white-space:normal; overflow-wrap:anywhere; opacity:0; visibility:hidden; pointer-events:none; transform:translateY(-50%) translateX(-3px); transition:opacity .14s ease,transform .14s ease,visibility .14s ease; }
+    .launcher.tooltip-left .launcher-tooltip { left:auto; right:calc(100% + 9px); transform:translateY(-50%) translateX(3px); }
+    .launcher:hover .launcher-tooltip,.launcher:focus-visible .launcher-tooltip { opacity:1; visibility:visible; transform:translateY(-50%) translateX(0); }
     .launcher:hover { transform:translateY(-2px); background:var(--surface); }
     .launcher.aih-dragging { cursor:grabbing; transform:scale(1.05); }
     .launcher:focus-visible,.icon-button:focus-visible,.filter:focus-visible,.item:focus-visible,input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
@@ -99,15 +102,18 @@
       }, (expanded) => this.panel.classList.toggle("site-menu-open", expanded));
       this.list = this.shadow.querySelector(".list");
       this.savedStatus = this.shadow.querySelector(".saved-status");
+      this.launcherTooltip = this.shadow.querySelector(".launcher-tooltip");
       this.bindEvents();
       this.positionsReady = this.loadPositions();
+      this.loadLastSavedTime().catch((error) => console.warn("[AI 输入历史] 读取上次自动保存时间失败", error));
     }
 
     markup() {
-      return `<button class="launcher hidden" type="button" aria-label="打开输入历史；长按移动；右键隐藏" title="点击打开 · 长按移动 · 右键隐藏">
+      return `<button class="launcher hidden" type="button" aria-label="打开输入历史；长按移动；右键隐藏" aria-describedby="aih-last-saved">
         <span class="launcher-symbol launcher-history"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h11M4 12h11M4 17h7M18 15v6m-3-3h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
         <span class="launcher-symbol launcher-check"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 12 4 4 8-9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         <span class="saved-status sr-only" aria-live="polite"></span>
+        <span class="launcher-tooltip" id="aih-last-saved" role="tooltip">尚未自动保存</span>
       </button>
       <section class="panel hidden" role="dialog" aria-label="输入历史">
         <header class="head"><div class="title-row"><div><span class="title">输入历史</span><span class="hint">拖动标题移动</span></div><div class="actions">
@@ -142,6 +148,8 @@
         event.preventDefault();
         this.disableLauncher();
       });
+      this.launcher.addEventListener("pointerenter", () => this.positionLauncherTooltip());
+      this.launcher.addEventListener("focus", () => this.positionLauncherTooltip());
       this.shadow.querySelector(".close").addEventListener("click", () => this.close());
       this.shadow.querySelector(".clear").addEventListener("click", () => this.clearHistory());
       this.search.addEventListener("input", () => this.refresh());
@@ -167,7 +175,8 @@
       this.launcher.classList.toggle("hidden", !enabled || !this.target);
     }
 
-    showSavedFeedback() {
+    showSavedFeedback(savedAt = Date.now()) {
+      this.setLastSavedAt(savedAt);
       if (!this.launcherEnabled && !this.isOpen()) return;
       clearTimeout(this.savedFeedbackTimer);
       this.launcher.classList.remove("aih-saved");
@@ -181,6 +190,35 @@
         this.launcher.classList.remove("aih-saved");
         this.panel.classList.remove("aih-saved");
       }, 850);
+    }
+
+    /** Updates the hover label with the latest automatic snapshot time for this site. */
+    setLastSavedAt(savedAt) {
+      this.lastSavedAt = Number(savedAt) || 0;
+      this.launcherTooltip.textContent = this.lastSavedAt
+        ? `上次自动保存：${formatSavedTime(this.lastSavedAt)}`
+        : "尚未自动保存";
+    }
+
+    /** Reads the latest automatic snapshot time from local extension storage. */
+    async loadLastSavedTime() {
+      const state = await this.store.getState();
+      this.syncLastSavedTime(state);
+    }
+
+    /** Applies a storage state received from another browser window. */
+    syncLastSavedTime(state) {
+      this.setLastSavedAt(namespace.historyModel.latestSnapshotTime(state?.entries || [], this.site));
+    }
+
+    /** Keeps the saved-time tooltip on the side with enough viewport space. */
+    positionLauncherTooltip() {
+      const rect = this.launcher.getBoundingClientRect();
+      const rightSpace = window.innerWidth - rect.right - 9;
+      const leftSpace = rect.left - 9;
+      const openLeft = rightSpace < 210 && leftSpace > rightSpace;
+      this.launcher.classList.toggle("tooltip-left", openLeft);
+      this.launcherTooltip.style.maxWidth = `${Math.max(80, Math.floor(openLeft ? leftSpace : rightSpace))}px`;
     }
 
     async disableLauncher() {
@@ -290,6 +328,7 @@
         ? this.savedPositions.launcher
         : { x: rect.left - 42, y: rect.top + (rect.height - 34) / 2 };
       this.applyPosition("launcher", launcherPosition);
+      this.positionLauncherTooltip();
       if (!this.isOpen()) return;
       if (this.manualPositions.panel) {
         this.applyPosition("panel", this.savedPositions.panel);
@@ -347,6 +386,14 @@
     const sameDay = date.toDateString() === new Date().toDateString();
     const options = sameDay ? { hour: "2-digit", minute: "2-digit" } : { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" };
     return new Intl.DateTimeFormat("zh-CN", options).format(date);
+  }
+
+  function formatSavedTime(timestamp) {
+    const date = new Date(timestamp);
+    const time = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date);
+    if (date.toDateString() === new Date().toDateString()) return `今天 ${time}`;
+    const day = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+    return `${day} ${time}`;
   }
 
   namespace.HistoryPanel = HistoryPanel;

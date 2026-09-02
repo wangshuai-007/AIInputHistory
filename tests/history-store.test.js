@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const source = fs.readFileSync(path.join(__dirname, "..", "src", "history-store.js"), "utf8");
 const context = { globalThis: {}, URL };
 vm.runInNewContext(source, context);
-const { filterEntries, normalizeDomain, pruneEntries, sanitizeSettings } = context.globalThis.AIInputHistory.historyModel;
+const { filterEntries, latestSnapshotTime, normalizeDomain, pruneEntries, sanitizeSettings } = context.globalThis.AIInputHistory.historyModel;
 
 test("发送记录按独立上限裁剪，全部记录保持倒序", () => {
   const entries = [
@@ -36,6 +36,17 @@ test("历史记录可按网站过滤", () => {
   const currentSite = filterEntries(entries, "", false, "chat.example");
   assert.deepEqual(Array.from(currentSite, (entry) => entry.text), ["当前网站"]);
   assert.equal(filterEntries(entries, "", false, "*").length, 2);
+});
+
+test("可读取当前网站最近一次自动保存时间", () => {
+  const entries = [
+    { kind: "snapshot", site: "chatgpt.com", createdAt: 10 },
+    { kind: "send", site: "chatgpt.com", createdAt: 30 },
+    { kind: "snapshot", site: "gemini.google.com", createdAt: 40 },
+    { kind: "snapshot", site: "chatgpt.com", createdAt: 20 }
+  ];
+  assert.equal(latestSnapshotTime(entries, "chatgpt.com"), 20);
+  assert.equal(latestSnapshotTime(entries, "gemini.google.com"), 40);
 });
 
 test("设置值被限制在安全范围", () => {
