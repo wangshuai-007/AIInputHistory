@@ -8,31 +8,41 @@
   const domainInput = document.querySelector("#domainInput");
   const domainList = document.querySelector("#domainList");
   let [settings, state] = await Promise.all([store.getSettings(), store.getState()]);
+  let saveQueue = Promise.resolve();
+  let statusTimer = null;
 
   numericFields.forEach((name) => {
     const input = document.querySelector(`#${name}`);
     input.value = settings[name];
-    input.addEventListener("change", () => persistSettings("设置已保存并立即生效"));
+    input.addEventListener("input", () => {
+      if (input.value !== "" && input.validity.valid) persistSettings({ [name]: input.value }, "设置已保存并立即生效", false);
+    });
+    input.addEventListener("change", () => persistSettings({ [name]: input.value }, "设置已保存并立即生效"));
   });
   launcherToggle.checked = settings.launcherEnabled;
-  launcherToggle.addEventListener("change", () => persistSettings(launcherToggle.checked ? "悬浮按钮已立即开启" : "悬浮按钮已立即关闭"));
+  launcherToggle.addEventListener("change", () => persistSettings(
+    { launcherEnabled: launcherToggle.checked },
+    launcherToggle.checked ? "悬浮按钮已立即开启" : "悬浮按钮已立即关闭"
+  ));
   document.querySelector("#domainForm").addEventListener("submit", addDomain);
   document.querySelector("#clear").addEventListener("click", clearHistory);
   renderStats(state);
   renderDomains();
 
-  async function persistSettings(message) {
-    const numeric = Object.fromEntries(numericFields.map((name) => [name, document.querySelector(`#${name}`).value]));
-    try {
-      settings = await store.saveSettings({ ...settings, ...numeric, launcherEnabled: launcherToggle.checked });
-      numericFields.forEach((name) => { document.querySelector(`#${name}`).value = settings[name]; });
-      launcherToggle.checked = settings.launcherEnabled;
-      renderDomains();
-      showStatus(message);
-    } catch (error) {
-      showStatus("保存失败，请重试", true);
-      console.error(error);
-    }
+  function persistSettings(patch, message, normalizeInputs = true) {
+    saveQueue = saveQueue.then(async () => {
+      try {
+        settings = await store.saveSettings({ ...settings, ...patch });
+        if (normalizeInputs) numericFields.forEach((name) => { document.querySelector(`#${name}`).value = settings[name]; });
+        launcherToggle.checked = settings.launcherEnabled;
+        renderDomains();
+        showStatus(message);
+      } catch (error) {
+        showStatus("保存失败，请重试", true);
+        console.error(error);
+      }
+    });
+    return saveQueue;
   }
 
   async function addDomain(event) {
@@ -52,12 +62,12 @@
     }
     settings = { ...settings, customDomains: [...settings.customDomains, domain] };
     domainInput.value = "";
-    await persistSettings("域名已添加，刷新该网站后生效");
+    await persistSettings({ customDomains: settings.customDomains }, "域名已添加，刷新该网站后生效");
   }
 
   async function removeDomain(domain) {
     settings = { ...settings, customDomains: settings.customDomains.filter((item) => item !== domain) };
-    await persistSettings("域名已移除，刷新页面后停止追踪");
+    await persistSettings({ customDomains: settings.customDomains }, "域名已移除，刷新页面后停止追踪");
   }
 
   function renderDomains() {
@@ -109,8 +119,9 @@
   }
 
   function showStatus(message, isError = false) {
+    clearTimeout(statusTimer);
     status.textContent = message;
     status.style.color = isError ? "#ef9f95" : "";
-    setTimeout(() => { status.textContent = ""; }, 2800);
+    statusTimer = setTimeout(() => { status.textContent = ""; }, 2800);
   }
 })(globalThis.AIInputHistory);
