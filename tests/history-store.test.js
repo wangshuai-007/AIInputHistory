@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const source = fs.readFileSync(path.join(__dirname, "..", "src", "history-store.js"), "utf8");
 const context = { globalThis: {}, URL };
 vm.runInNewContext(source, context);
-const { filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeSettings, shortcutFromEvent } = context.globalThis.AIInputHistory.historyModel;
+const { collapseSnapshotsForSend, compactSentSnapshots, filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeSettings, shortcutFromEvent } = context.globalThis.AIInputHistory.historyModel;
 
 test("发送记录按独立上限裁剪，全部记录保持倒序", () => {
   const entries = [
@@ -36,6 +36,28 @@ test("历史记录可按网站过滤", () => {
   const currentSite = filterEntries(entries, "", false, "chat.example");
   assert.deepEqual(Array.from(currentSite, (entry) => entry.text), ["当前网站"]);
   assert.equal(filterEntries(entries, "", false, "*").length, 2);
+});
+
+test("发送后合并当前输入会话的递增快照", () => {
+  const entries = [
+    { id: "old-send", kind: "send", fieldKey: "composer", sessionId: "old", createdAt: 10 },
+    { id: "old-snapshot", kind: "snapshot", fieldKey: "composer", sessionId: "old", createdAt: 8 },
+    { id: "step-1", kind: "snapshot", fieldKey: "composer", sessionId: "current", createdAt: 20 },
+    { id: "step-2", kind: "snapshot", fieldKey: "composer", sessionId: "current", createdAt: 30 },
+    { id: "other-window", kind: "snapshot", fieldKey: "composer", sessionId: "other", createdAt: 35 }
+  ];
+  const result = collapseSnapshotsForSend(entries, "composer", "current");
+  assert.deepEqual(Array.from(result, (entry) => entry.id), ["old-send", "old-snapshot", "other-window"]);
+});
+
+test("升级后自动隐藏已被发送记录取代的旧快照", () => {
+  const entries = [
+    { id: "sent", text: "完整问题", kind: "send", fieldKey: "composer", createdAt: 40 },
+    { id: "step-1", text: "完整", kind: "snapshot", fieldKey: "composer", createdAt: 20 },
+    { id: "step-2", text: "完整问", kind: "snapshot", fieldKey: "composer", createdAt: 30 },
+    { id: "new-draft", text: "下一条", kind: "snapshot", fieldKey: "composer", createdAt: 50 }
+  ];
+  assert.deepEqual(Array.from(compactSentSnapshots(entries), (entry) => entry.id), ["sent", "new-draft"]);
 });
 
 test("可读取当前网站最近一次自动保存时间", () => {

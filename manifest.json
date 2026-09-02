@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI 输入历史",
-  "version": "1.18.0",
+  "version": "1.19.0",
   "description": "在各类 AI 聊天网站本地保存输入草稿与发送前内容，并提供搜索和快捷切换。",
   "permissions": ["storage"],
   "background": {

@@ -101,6 +101,29 @@
       .slice(0, limits.historyLimit);
   }
 
+  /** Removes incremental snapshots from the current composition after its previous send. */
+  function collapseSnapshotsForSend(entries, fieldKey, sessionId = "") {
+    const previousSendAt = entries
+      .filter((entry) => entry?.kind === "send" && entry.fieldKey === fieldKey)
+      .reduce((latest, entry) => Math.max(latest, Number(entry.createdAt) || 0), 0);
+    return entries.filter((entry) => {
+      if (entry?.kind !== "snapshot") return true;
+      if (sessionId && entry.sessionId) return entry.sessionId !== sessionId;
+      return entry.fieldKey !== fieldKey || (Number(entry.createdAt) || 0) <= previousSendAt;
+    });
+  }
+
+  /** Hides legacy snapshots that were superseded by a later send from the same composition. */
+  function compactSentSnapshots(entries) {
+    const sends = entries.filter((entry) => entry?.kind === "send");
+    return entries.filter((entry) => {
+      if (entry?.kind !== "snapshot") return true;
+      if (entry.sessionId) return !sends.some((send) => send.sessionId && send.sessionId === entry.sessionId);
+      return !sends.some((send) => send.fieldKey === entry.fieldKey
+        && (Number(send.createdAt) || 0) >= (Number(entry.createdAt) || 0));
+    });
+  }
+
   function filterEntries(entries, query, sendOnly, site = "*") {
     const keyword = String(query || "").trim().toLocaleLowerCase();
     return entries.filter(Boolean).map(normalizeEntry)
@@ -188,7 +211,7 @@
       const stored = result[STORAGE_KEY];
       if (!stored || !Array.isArray(stored.entries)) return initialState();
       return {
-        entries: stored.entries.map(normalizeEntry),
+        entries: compactSentSnapshots(stored.entries.map(normalizeEntry)),
         drafts: stored.drafts && typeof stored.drafts === "object" ? stored.drafts : {},
         positions: stored.positions && typeof stored.positions === "object" ? stored.positions : {},
         siteIcons: stored.siteIcons && typeof stored.siteIcons === "object" ? stored.siteIcons : {}
@@ -205,8 +228,11 @@
           .sort((left, right) => right.createdAt - left.createdAt)[0];
         if (normalizedKind === "snapshot" && latest?.text === text) return latest;
 
-        const entry = { id: makeId(), text, kind: normalizedKind, createdAt: Date.now(), site: context.site, title: context.title, fieldKey: context.fieldKey };
-        state.entries = pruneEntries([entry, ...state.entries], settings);
+        const entry = { id: makeId(), text, kind: normalizedKind, createdAt: Date.now(), site: context.site, title: context.title, fieldKey: context.fieldKey, sessionId: context.sessionId || "" };
+        const existingEntries = normalizedKind === "send"
+          ? collapseSnapshotsForSend(state.entries, context.fieldKey, context.sessionId)
+          : state.entries;
+        state.entries = pruneEntries([entry, ...existingEntries], settings);
         await storageSet({ [STORAGE_KEY]: state });
         return entry;
       });
@@ -289,5 +315,5 @@
   namespace.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
   namespace.HistoryStore = HistoryStore;
   namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY };
-  namespace.historyModel = { filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeSettings, shortcutFromEvent };
+  namespace.historyModel = { collapseSnapshotsForSend, compactSentSnapshots, filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeSettings, shortcutFromEvent };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

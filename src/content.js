@@ -71,11 +71,13 @@
   }
 
   function activate(element) {
+    const sessionId = activeInput === element && activeContext?.sessionId ? activeContext.sessionId : makeSessionId();
     activeInput = element;
     activeContext = {
       fieldKey: adapter.fieldKey(element),
       site: location.hostname,
-      title: document.title.slice(0, 120)
+      title: document.title.slice(0, 120),
+      sessionId
     };
     navigationEntries = [];
     navigationIndex = -1;
@@ -116,13 +118,17 @@
 
   async function recordSend(text, context) {
     if (!text.trim()) return;
+    clearTimeout(draftTimer);
+    lastSnapshotText = text;
     try {
       await store.addEntry(text, "send", context);
       await store.saveDraft(context.fieldKey, "", context);
       navigationEntries = [];
       navigationIndex = -1;
+      if (activeContext === context) activeContext = { ...context, sessionId: makeSessionId() };
       if (panel.isOpen()) await panel.refresh();
     } catch (error) {
+      lastSnapshotText = "";
       console.warn("[AI 输入历史] 记录发送内容失败", error);
     }
   }
@@ -202,6 +208,10 @@
     clearInterval(snapshotTimer);
     const settings = await store.getSettings();
     snapshotTimer = setInterval(recordSnapshot, settings.snapshotSeconds * 1_000);
+  }
+
+  function makeSessionId() {
+    return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {}).catch((error) => {
   console.warn("[AI 输入历史] 初始化失败", error);
