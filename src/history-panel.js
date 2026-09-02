@@ -6,18 +6,14 @@
     * { box-sizing:border-box; } button,input { font:inherit; }
     .launcher { position:fixed; z-index:2147483646; width:34px; height:34px; border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line)); border-radius:11px; background:var(--bg); color:var(--accent-strong); display:grid; place-items:center; box-shadow:0 8px 26px rgba(0,0,0,.28); cursor:pointer; touch-action:none; transition:transform .16s ease,background .16s ease,border-color .16s ease; }
     .launcher-symbol { position:absolute; display:grid; place-items:center; transition:opacity .16s ease,transform .16s ease; }
-    .launcher-check { opacity:0; transform:scale(.55) rotate(-10deg); }
+    .launcher-save { opacity:0; transform:scale(.55) translateY(2px); }
     .launcher.aih-saved { border-color:var(--accent-strong); animation:aih-save-pop .72s ease-out; }
     .launcher.aih-saved::after { content:""; position:absolute; inset:-1px; border:2px solid var(--accent); border-radius:12px; pointer-events:none; animation:aih-save-ring .72s ease-out; }
     .launcher.aih-saved .launcher-history { opacity:0; transform:scale(.65); }
-    .launcher.aih-saved .launcher-check { opacity:1; transform:scale(1) rotate(0); }
+    .launcher.aih-saved .launcher-save { opacity:1; transform:scale(1) translateY(0); }
     .launcher-tooltip { position:absolute; z-index:2; left:calc(100% + 9px); top:50%; width:max-content; max-width:min(240px,calc(100vw - 58px)); padding:7px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg); color:var(--text); box-shadow:0 8px 24px rgba(0,0,0,.3); font-size:11px; line-height:1.35; white-space:normal; overflow-wrap:anywhere; opacity:0; visibility:hidden; pointer-events:none; transform:translateY(-50%) translateX(-3px); transition:opacity .14s ease,transform .14s ease,visibility .14s ease; }
     .launcher.tooltip-left .launcher-tooltip { left:auto; right:calc(100% + 9px); transform:translateY(-50%) translateX(3px); }
     .launcher:hover .launcher-tooltip,.launcher:focus-visible .launcher-tooltip { opacity:1; visibility:visible; transform:translateY(-50%) translateX(0); }
-    .launcher-save-toast { position:absolute; z-index:3; left:calc(100% + 9px); top:50%; width:max-content; max-width:220px; padding:7px 11px; border:1px solid color-mix(in srgb,var(--accent) 70%,var(--line)); border-radius:9px; background:var(--accent); color:#0c1710; box-shadow:0 10px 26px rgba(0,0,0,.3); font-size:11px; font-weight:700; line-height:1.35; white-space:nowrap; opacity:0; visibility:hidden; pointer-events:none; transform:translateY(-50%) translateX(-6px) scale(.96); }
-    .launcher.tooltip-left .launcher-save-toast { left:auto; right:calc(100% + 9px); transform:translateY(-50%) translateX(6px) scale(.96); }
-    .launcher.aih-saved .launcher-tooltip { opacity:0; visibility:hidden; }
-    .launcher.aih-saved .launcher-save-toast { visibility:visible; animation:aih-save-toast 1.55s ease-out both; }
     .launcher:hover { transform:translateY(-2px); background:var(--surface); }
     .launcher.aih-dragging { cursor:grabbing; transform:scale(1.05); }
     .launcher:focus-visible,.icon-button:focus-visible,.filter:focus-visible,.item:focus-visible,input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
@@ -28,7 +24,6 @@
     @keyframes aih-in { from { opacity:0; transform:translateY(8px) scale(.98); } }
     @keyframes aih-save-pop { 0%,100% { transform:scale(1); } 38% { transform:scale(1.14); background:var(--surface); } }
     @keyframes aih-save-ring { 0% { opacity:.9; transform:scale(.82); } 100% { opacity:0; transform:scale(1.55); } }
-    @keyframes aih-save-toast { 0% { opacity:0; transform:translateY(-50%) translateX(-7px) scale(.95); } 14%,78% { opacity:1; transform:translateY(-50%) translateX(0) scale(1); } 100% { opacity:0; transform:translateY(-50%) translateX(4px) scale(.98); } }
     @keyframes aih-panel-saved { 0%,100% { box-shadow:0 22px 60px rgba(0,0,0,.42); } 35% { box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 55%,transparent),0 22px 60px rgba(0,0,0,.42); } }
     .panel.aih-saved { animation:aih-panel-saved .72s ease-out; }
     .head { position:relative; z-index:2; padding:16px 16px 12px; border-bottom:1px solid var(--line); border-radius:17px 17px 0 0; background:linear-gradient(140deg,var(--surface),var(--bg)); }
@@ -76,7 +71,7 @@
     :host([data-theme="dark"]) .search { background:#0d120f; } :host([data-theme="dark"]) .filter.active,:host([data-theme="dark"]) .badge { color:#0c1710; }
     :host([data-theme="light"]) { --bg:#fbfdfb; --surface:#edf4ef; --line:#cbd9cf; --text:#17221a; --muted:#66766b; --accent:#2f8f53; --accent-strong:#287b48; }
     :host([data-theme="light"]) .search { background:#fff; } :host([data-theme="light"]) .filter.active,:host([data-theme="light"]) .badge { color:#fff; }
-    @media (prefers-reduced-motion:reduce) { * { animation:none!important; transition:none!important; } .launcher.aih-saved .launcher-history { opacity:0; } .launcher.aih-saved .launcher-check { opacity:1; transform:none; } .launcher.aih-saved .launcher-save-toast { opacity:1; transform:translateY(-50%); } }
+    @media (prefers-reduced-motion:reduce) { * { animation:none!important; transition:none!important; } .launcher.aih-saved .launcher-history { opacity:0; } .launcher.aih-saved .launcher-save { opacity:1; transform:none; } }
   `;
 
   class HistoryPanel {
@@ -107,7 +102,6 @@
       }, (expanded) => this.panel.classList.toggle("site-menu-open", expanded));
       this.list = this.shadow.querySelector(".list");
       this.savedStatus = this.shadow.querySelector(".saved-status");
-      this.saveToast = this.shadow.querySelector(".launcher-save-toast");
       this.launcherTooltip = this.shadow.querySelector(".launcher-tooltip");
       this.bindEvents();
       this.positionsReady = this.loadPositions();
@@ -117,9 +111,8 @@
     markup() {
       return `<button class="launcher hidden" type="button" aria-label="打开输入历史；长按移动；右键隐藏" aria-describedby="aih-last-saved">
         <span class="launcher-symbol launcher-history"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h11M4 12h11M4 17h7M18 15v6m-3-3h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
-        <span class="launcher-symbol launcher-check"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 12 4 4 8-9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="launcher-symbol launcher-save"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 4h11l3 3v13H5V4Zm3 0v6h8V4M8 20v-6h8v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         <span class="saved-status sr-only" aria-live="polite"></span>
-        <span class="launcher-save-toast" aria-hidden="true">已自动保存</span>
         <span class="launcher-tooltip" id="aih-last-saved" role="tooltip">尚未自动保存</span>
       </button>
       <section class="panel hidden" role="dialog" aria-label="输入历史">
@@ -184,7 +177,6 @@
 
     showSavedFeedback(savedAt = Date.now()) {
       this.setLastSavedAt(savedAt);
-      this.saveToast.textContent = `已自动保存 ${formatClock(savedAt)}`;
       if (!this.launcherEnabled && !this.isOpen()) return;
       clearTimeout(this.savedFeedbackTimer);
       this.launcher.classList.remove("aih-saved");
@@ -197,7 +189,7 @@
       this.savedFeedbackTimer = setTimeout(() => {
         this.launcher.classList.remove("aih-saved");
         this.panel.classList.remove("aih-saved");
-      }, 1_600);
+      }, 1_150);
     }
 
     /** Updates the hover label with the latest automatic snapshot time for this site. */
@@ -228,7 +220,6 @@
       this.launcher.classList.toggle("tooltip-left", openLeft);
       const availableWidth = `${Math.max(80, Math.floor(openLeft ? leftSpace : rightSpace))}px`;
       this.launcherTooltip.style.maxWidth = availableWidth;
-      this.saveToast.style.maxWidth = availableWidth;
     }
 
     async disableLauncher() {
