@@ -3,11 +3,12 @@
 
   const STORAGE_KEY = "aiInputHistoryState";
   const SETTINGS_KEY = "aiInputHistorySettings";
+  const DEFAULT_SHORTCUT = "Ctrl+R";
   const DEFAULT_SETTINGS = Object.freeze({
     historyLimit: 100,
     sendLimit: 10,
     snapshotSeconds: 60,
-    shortcut: "Ctrl+R",
+    shortcut: DEFAULT_SHORTCUT,
     launcherEnabled: true,
     customDomains: []
   });
@@ -19,7 +20,7 @@
       historyLimit: clampInteger(source.historyLimit, 20, 500, DEFAULT_SETTINGS.historyLimit),
       sendLimit: clampInteger(source.sendLimit ?? source.enterLimit, 1, 50, DEFAULT_SETTINGS.sendLimit),
       snapshotSeconds: clampInteger(snapshotSeconds, 1, 3600, DEFAULT_SETTINGS.snapshotSeconds),
-      shortcut: DEFAULT_SETTINGS.shortcut,
+      shortcut: normalizeShortcut(source.shortcut),
       launcherEnabled: source.launcherEnabled !== false,
       customDomains: [...new Set((Array.isArray(source.customDomains) ? source.customDomains : [])
         .map(normalizeDomain).filter(Boolean))].slice(0, 100)
@@ -29,6 +30,47 @@
   function clampInteger(value, min, max, fallback) {
     const parsed = Number.parseInt(value, 10);
     return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+  }
+
+  /** Normalizes a stored keyboard shortcut and preserves an explicitly disabled shortcut. */
+  function normalizeShortcut(value) {
+    if (value === "") return "";
+    if (typeof value !== "string") return DEFAULT_SHORTCUT;
+    const tokens = value.split("+").map((token) => token.trim()).filter(Boolean);
+    const key = tokens.find((token) => !["Ctrl", "Alt", "Shift", "Meta"].includes(token));
+    const modifiers = ["Ctrl", "Alt", "Shift", "Meta"].filter((modifier) => tokens.includes(modifier));
+    if (!key || (modifiers.length === 0 && !/^F(?:[1-9]|1[0-2])$/.test(key))) return DEFAULT_SHORTCUT;
+    return [...modifiers, key].join("+");
+  }
+
+  /** Converts a keyboard event to the canonical shortcut string used by settings. */
+  function shortcutFromEvent(event) {
+    const key = shortcutKey(event);
+    if (!key) return "";
+    const modifiers = [
+      event.ctrlKey && "Ctrl",
+      event.altKey && "Alt",
+      event.shiftKey && "Shift",
+      event.metaKey && "Meta"
+    ].filter(Boolean);
+    if (!modifiers.length && !/^F(?:[1-9]|1[0-2])$/.test(key)) return "";
+    return [...modifiers, key].join("+");
+  }
+
+  /** Reports whether an event matches the currently configured shortcut. */
+  function matchesShortcut(event, shortcut) {
+    return Boolean(shortcut && !event.repeat && shortcutFromEvent(event) === normalizeShortcut(shortcut));
+  }
+
+  function shortcutKey(event) {
+    if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) return "";
+    if (/^Key[A-Z]$/.test(event.code || "")) return event.code.slice(3);
+    if (/^Digit[0-9]$/.test(event.code || "")) return event.code.slice(5);
+    if (/^F(?:[1-9]|1[0-2])$/.test(event.key || "")) return event.key;
+    const names = { " ": "Space", ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", Escape: "Esc", "+": "Plus", "-": "Minus" };
+    if (names[event.key]) return names[event.key];
+    if (typeof event.key === "string" && event.key.length === 1) return event.key.toLocaleUpperCase();
+    return ["Enter", "Tab", "Backspace", "Delete", "Home", "End", "PageUp", "PageDown", "Insert"].includes(event.key) ? event.key : "";
   }
 
   function normalizeEntry(entry) {
@@ -247,5 +289,5 @@
   namespace.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
   namespace.HistoryStore = HistoryStore;
   namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY };
-  namespace.historyModel = { filterEntries, latestSnapshotTime, normalizeDomain, pruneEntries, sanitizeSettings };
+  namespace.historyModel = { filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeSettings, shortcutFromEvent };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

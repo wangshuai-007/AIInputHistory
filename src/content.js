@@ -6,6 +6,7 @@
 
   const store = new namespace.HistoryStore();
   const settings = await store.getSettings();
+  let liveSettings = settings;
   if (!namespace.SiteProfiles.isAllowedSite(location.hostname, settings.customDomains)) return;
   namespace.SiteProfiles.setSiteIcons(await store.getSiteIcons());
   namespace.captureSiteIcon(store, location.hostname).then(async (dataUrl) => {
@@ -37,6 +38,7 @@
     if (areaName !== "local") return;
     const nextSettings = changes[namespace.STORAGE_KEYS.settings]?.newValue;
     if (nextSettings) {
+      liveSettings = namespace.historyModel.sanitizeSettings(nextSettings);
       panel.setLauncherEnabled(nextSettings.launcherEnabled !== false);
       if (changes[namespace.STORAGE_KEYS.settings]?.oldValue?.snapshotSeconds !== nextSettings.snapshotSeconds) scheduleSnapshots();
     }
@@ -156,7 +158,7 @@
     }
 
     if (!activeInput || adapter.resolveEventEditable(event) !== activeInput) return;
-    if (event.ctrlKey && !event.altKey && !event.metaKey && event.key.toLocaleLowerCase() === "r") {
+    if (namespace.historyModel.matchesShortcut(event, liveSettings.shortcut)) {
       event.preventDefault();
       event.stopImmediatePropagation();
       await panel.open();

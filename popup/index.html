@@ -23,7 +23,14 @@
       <label><span>发送记录上限<small>确认实际发送前的内容</small></span><input id="sendLimit" type="number" min="1" max="50"></label>
       <label><span>自动快照间隔<small>单位：秒，范围 1–3600</small></span><input id="snapshotSeconds" type="number" min="1" max="3600" step="1"></label>
       <div class="setting-row"><span>显示悬浮按钮<small>右键隐藏后可在这里重新打开</small></span><label class="switch"><input id="launcherEnabled" type="checkbox"><span aria-hidden="true"></span></label></div>
-      <div class="shortcut"><span>打开历史<small>在聊天输入框内使用</small></span><kbd>Ctrl</kbd><i>+</i><kbd>R</kbd></div>
+      <div class="shortcut-setting">
+        <div class="shortcut-copy"><span>打开历史</span><small>点击按键框，然后按下组合键</small></div>
+        <div class="shortcut-controls">
+          <button id="shortcutCapture" class="shortcut-capture" type="button" aria-label="设置打开历史快捷键"></button>
+          <button id="shortcutDisable" class="shortcut-disable" type="button">停用</button>
+        </div>
+        <small class="shortcut-help">组合键需包含 Ctrl、Alt、Shift 或 Windows/Command；也可单独使用 F1–F12。按 Esc 取消录制。</small>
+      </div>
     </section>
     <section class="domains">
       <h2>自定义追踪域名</h2>
@@ -32,7 +39,7 @@
       <div id="domainList" class="domain-list"></div>
     </section>
     <div id="status" role="status" aria-live="polite"></div>
-    <footer><button id="clear" type="button">清空本地记录</button><span>v1.17.0</span></footer>
+    <footer><button id="clear" type="button">清空本地记录</button><span>v1.18.0</span></footer>
   </main>
   <script src="../src/history-store.js"></script>
   <script src="../src/site-profiles.js"></script>

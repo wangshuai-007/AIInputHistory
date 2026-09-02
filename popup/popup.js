@@ -7,9 +7,12 @@
   const launcherToggle = document.querySelector("#launcherEnabled");
   const domainInput = document.querySelector("#domainInput");
   const domainList = document.querySelector("#domainList");
+  const shortcutCapture = document.querySelector("#shortcutCapture");
+  const shortcutDisable = document.querySelector("#shortcutDisable");
   let [settings, state] = await Promise.all([store.getSettings(), store.getState()]);
   let saveQueue = Promise.resolve();
   let statusTimer = null;
+  let capturingShortcut = false;
 
   numericFields.forEach((name) => {
     const input = document.querySelector(`#${name}`);
@@ -26,8 +29,12 @@
   ));
   document.querySelector("#domainForm").addEventListener("submit", addDomain);
   document.querySelector("#clear").addEventListener("click", clearHistory);
+  shortcutCapture.addEventListener("click", startShortcutCapture);
+  shortcutCapture.addEventListener("keydown", captureShortcut);
+  shortcutDisable.addEventListener("click", disableShortcut);
   renderStats(state);
   renderDomains();
+  renderShortcut(settings.shortcut);
 
   function persistSettings(patch, message, normalizeInputs = true) {
     saveQueue = saveQueue.then(async () => {
@@ -36,6 +43,7 @@
         if (normalizeInputs) numericFields.forEach((name) => { document.querySelector(`#${name}`).value = settings[name]; });
         launcherToggle.checked = settings.launcherEnabled;
         renderDomains();
+        if (!capturingShortcut) renderShortcut(settings.shortcut);
         showStatus(message);
       } catch (error) {
         showStatus("保存失败，请重试", true);
@@ -68,6 +76,71 @@
   async function removeDomain(domain) {
     settings = { ...settings, customDomains: settings.customDomains.filter((item) => item !== domain) };
     await persistSettings({ customDomains: settings.customDomains }, "域名已移除，刷新页面后停止追踪");
+  }
+
+  function startShortcutCapture() {
+    capturingShortcut = true;
+    shortcutCapture.classList.add("capturing");
+    shortcutCapture.setAttribute("aria-label", "正在录制快捷键，请按组合键");
+    renderShortcutTokens([], "请按组合键…");
+  }
+
+  function captureShortcut(event) {
+    if (!capturingShortcut) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === "Escape") {
+      stopShortcutCapture();
+      renderShortcut(settings.shortcut);
+      showStatus("已取消快捷键录制");
+      return;
+    }
+    const shortcut = namespace.historyModel.shortcutFromEvent(event);
+    if (!shortcut) {
+      const modifiers = [event.ctrlKey && "Ctrl", event.altKey && "Alt", event.shiftKey && "Shift", event.metaKey && "Meta"].filter(Boolean);
+      renderShortcutTokens(modifiers, modifiers.length ? "继续按一个按键…" : "需包含修饰键");
+      return;
+    }
+    stopShortcutCapture();
+    renderShortcut(shortcut);
+    persistSettings({ shortcut }, "快捷键已更新并立即生效");
+  }
+
+  function disableShortcut() {
+    stopShortcutCapture();
+    renderShortcut("");
+    persistSettings({ shortcut: "" }, "快捷键已停用");
+  }
+
+  function stopShortcutCapture() {
+    capturingShortcut = false;
+    shortcutCapture.classList.remove("capturing");
+    shortcutCapture.setAttribute("aria-label", "设置打开历史快捷键");
+  }
+
+  function renderShortcut(shortcut) {
+    shortcutDisable.disabled = !shortcut;
+    renderShortcutTokens(shortcut ? shortcut.split("+") : [], shortcut ? "" : "未启用 · 点击设置");
+  }
+
+  function renderShortcutTokens(tokens, placeholder) {
+    shortcutCapture.replaceChildren();
+    tokens.forEach((token, index) => {
+      if (index) appendShortcutPart("span", "key-plus", "+");
+      appendShortcutPart("span", "keycap", shortcutTokenLabel(token));
+    });
+    if (placeholder) appendShortcutPart("span", "shortcut-placeholder", placeholder);
+  }
+
+  function appendShortcutPart(tagName, className, text) {
+    const part = document.createElement(tagName);
+    part.className = className;
+    part.textContent = text;
+    shortcutCapture.appendChild(part);
+  }
+
+  function shortcutTokenLabel(token) {
+    return ({ Meta: "Win/⌘", Space: "空格", Plus: "+", Minus: "−" })[token] || token;
   }
 
   function renderDomains() {

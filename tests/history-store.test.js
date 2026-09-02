@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const source = fs.readFileSync(path.join(__dirname, "..", "src", "history-store.js"), "utf8");
 const context = { globalThis: {}, URL };
 vm.runInNewContext(source, context);
-const { filterEntries, latestSnapshotTime, normalizeDomain, pruneEntries, sanitizeSettings } = context.globalThis.AIInputHistory.historyModel;
+const { filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeSettings, shortcutFromEvent } = context.globalThis.AIInputHistory.historyModel;
 
 test("发送记录按独立上限裁剪，全部记录保持倒序", () => {
   const entries = [
@@ -53,6 +53,15 @@ test("设置值被限制在安全范围", () => {
   const settings = sanitizeSettings({ historyLimit: 9999, enterLimit: 0, snapshotMinutes: "5" });
   assert.deepEqual(JSON.parse(JSON.stringify(settings)), { historyLimit: 500, sendLimit: 1, snapshotSeconds: 300, shortcut: "Ctrl+R", launcherEnabled: true, customDomains: [] });
   assert.equal(sanitizeSettings({ snapshotSeconds: 5 }).snapshotSeconds, 5);
+});
+
+test("快捷键支持自定义、匹配和停用", () => {
+  const event = { key: "k", code: "KeyK", ctrlKey: true, altKey: false, shiftKey: true, metaKey: false, repeat: false };
+  assert.equal(shortcutFromEvent(event), "Ctrl+Shift+K");
+  assert.equal(matchesShortcut(event, "Ctrl+Shift+K"), true);
+  assert.equal(normalizeShortcut(""), "");
+  assert.equal(sanitizeSettings({ shortcut: "" }).shortcut, "");
+  assert.equal(sanitizeSettings({ shortcut: "Alt+H" }).shortcut, "Alt+H");
 });
 
 test("自定义域名会被规范化并去重", () => {
