@@ -33,6 +33,7 @@ test("自动快照保存反馈可重复触发并在结束后复位", () => {
     launcher: { classList: launcherClasses, offsetWidth: 34 },
     panel: { classList: panelClasses },
     savedStatus: { textContent: "" },
+    saveToast: { textContent: "", style: {} },
     launcherTooltip: { textContent: "" },
     setLastSavedAt: panelPrototype.setLastSavedAt,
     isOpen: () => true
@@ -42,6 +43,7 @@ test("自动快照保存反馈可重复触发并在结束后复位", () => {
   assert.equal(launcherClasses.contains("aih-saved"), true);
   assert.equal(panelClasses.contains("aih-saved"), true);
   assert.equal(instance.savedStatus.textContent, "自动快照已保存");
+  assert.match(instance.saveToast.textContent, /^已自动保存 /);
   assert.match(instance.launcherTooltip.textContent, /^上次自动保存：今天 /);
 
   finishAnimation();
