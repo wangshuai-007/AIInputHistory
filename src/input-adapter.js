@@ -93,19 +93,6 @@
     selection.addRange(range);
   }
 
-  function shouldNavigateHistory(element, direction) {
-    element = resolveEditable(element);
-    if (!element) return false;
-    if (element instanceof HTMLInputElement) {
-      return direction === "up" ? element.selectionStart === 0 : element.selectionEnd === element.value.length;
-    }
-    if (element instanceof HTMLTextAreaElement) {
-      if (!element.value) return true;
-      return direction === "up" ? element.selectionStart === 0 : element.selectionEnd === element.value.length;
-    }
-    return !getText(element).trim();
-  }
-
   function fieldKey(element) {
     element = resolveEditable(element);
     const identity = [location.origin, location.pathname, element.id, element.getAttribute("name"), element.getAttribute("aria-label"), element.getAttribute("placeholder"), element.tagName]
@@ -118,5 +105,5 @@
     return `${location.hostname}:${(hash >>> 0).toString(36)}`;
   }
 
-  namespace.InputAdapter = { composerScore, fieldKey, getText, isEditable, resolveEditable, resolveEventEditable, setText, shouldNavigateHistory };
+  namespace.InputAdapter = { composerScore, fieldKey, getText, isEditable, resolveEditable, resolveEventEditable, setText };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

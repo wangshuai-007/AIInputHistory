@@ -15,23 +15,18 @@
     if (panel.isOpen()) panel.loadSites();
   });
   const adapter = namespace.InputAdapter;
+  const historyNavigator = new namespace.HistoryNavigator(store, adapter);
   let activeInput = null;
   let activeContext = null;
   let draftTimer = null;
   let snapshotTimer = null;
   let lastSnapshotText = "";
-  let navigationEntries = [];
-  let navigationIndex = -1;
-  let navigationOriginal = "";
   let storageSyncTimer = null;
 
   const panel = new namespace.HistoryPanel(
     store,
     (text) => { if (activeInput) adapter.setText(activeInput, text); },
-    () => {
-      navigationEntries = [];
-      navigationIndex = -1;
-    }
+    () => historyNavigator.reset()
   );
   panel.setLauncherEnabled(settings.launcherEnabled);
   chrome.storage.onChanged?.addListener((changes, areaName) => {
@@ -71,6 +66,7 @@
   }
 
   function activate(element) {
+    if (activeInput !== element) historyNavigator.reset();
     const sessionId = activeInput === element && activeContext?.sessionId ? activeContext.sessionId : makeSessionId();
     activeInput = element;
     activeContext = {
@@ -79,16 +75,15 @@
       title: document.title.slice(0, 120),
       sessionId
     };
-    navigationEntries = [];
-    navigationIndex = -1;
     panel.setTarget(element);
     scheduleSnapshots();
   }
 
   function handleInput(event) {
     if (adapter.resolveEventEditable(event) !== activeInput) return;
+    if (historyNavigator.isApplying()) return;
     if (!adapter.getText(activeInput).trim()) lastSnapshotText = "";
-    navigationIndex = -1;
+    historyNavigator.reset();
     clearTimeout(draftTimer);
     draftTimer = setTimeout(saveDraft, 500);
   }
@@ -123,8 +118,7 @@
     try {
       await store.addEntry(text, "send", context);
       await store.saveDraft(context.fieldKey, "", context);
-      navigationEntries = [];
-      navigationIndex = -1;
+      historyNavigator.reset();
       if (activeContext === context) activeContext = { ...context, sessionId: makeSessionId() };
       if (panel.isOpen()) await panel.refresh();
     } catch (error) {
@@ -174,34 +168,11 @@
       sendDetector.watchEnter(event, activeInput, activeContext);
       return;
     }
-    if (!event.ctrlKey && !event.altKey && !event.metaKey && ["ArrowUp", "ArrowDown"].includes(event.key)) {
+    if (!event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey && ["ArrowUp", "ArrowDown"].includes(event.key)) {
+      event.preventDefault();
       const direction = event.key === "ArrowUp" ? "up" : "down";
-      if (adapter.shouldNavigateHistory(activeInput, direction)) {
-        const switched = await navigateHistory(direction);
-        if (switched) event.preventDefault();
-      }
+      await historyNavigator.move(direction, activeInput, activeContext);
     }
-  }
-
-  async function navigateHistory(direction) {
-    if (!navigationEntries.length) {
-      navigationEntries = await store.getHistory("", false, activeContext.site);
-      navigationOriginal = adapter.getText(activeInput);
-    }
-    if (!navigationEntries.length) return false;
-    if (direction === "up") {
-      navigationIndex = Math.min(navigationEntries.length - 1, navigationIndex + 1);
-      adapter.setText(activeInput, navigationEntries[navigationIndex].text);
-      return true;
-    }
-    if (navigationIndex <= 0) {
-      navigationIndex = -1;
-      adapter.setText(activeInput, navigationOriginal);
-      return true;
-    }
-    navigationIndex -= 1;
-    adapter.setText(activeInput, navigationEntries[navigationIndex].text);
-    return true;
   }
 
   async function scheduleSnapshots() {
