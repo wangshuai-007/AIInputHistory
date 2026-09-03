@@ -14,8 +14,15 @@ if (!manifest.content_scripts?.[0]?.matches?.includes("<all_urls>")) errors.push
 const referencedFiles = [
   manifest.background?.service_worker,
   manifest.action?.default_popup,
+  ...Object.values(manifest.icons || {}),
+  ...Object.values(manifest.action?.default_icon || {}),
   ...manifest.content_scripts.flatMap((script) => script.js || [])
 ].filter(Boolean);
+
+if (!manifest.default_locale) errors.push("缺少 default_locale");
+for (const locale of [manifest.default_locale, "en"]) {
+  if (!fs.existsSync(path.join(root, "_locales", locale, "messages.json"))) errors.push(`缺少语言包: ${locale}`);
+}
 
 for (const relativePath of referencedFiles) {
   if (!fs.existsSync(path.join(root, relativePath))) errors.push(`缺少文件: ${relativePath}`);

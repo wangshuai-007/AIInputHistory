@@ -4,6 +4,7 @@
   const MESSAGES = {
     "zh-CN": {
       "app.title": "AI 输入历史", "app.localOnly": "仅保存在这台浏览器中", "language.label": "界面语言",
+      "privacy.disclosure": "读取你在已支持 AI 网站输入的内容、页面标题和域名，仅用于本地历史记录；数据不会上传或共享。",
       "summary.label": "存储摘要", "summary.history": "历史记录", "summary.send": "发送记录", "summary.draft": "未发送草稿",
       "settings.title": "记录设置", "settings.historyLimit": "历史上限", "settings.historyLimitHint": "最近输入，按时间倒序",
       "settings.sendLimit": "发送记录上限", "settings.sendLimitHint": "确认实际发送前的内容", "settings.snapshot": "自动快照间隔",
@@ -31,6 +32,7 @@
     },
     en: {
       "app.title": "AI Input History", "app.localOnly": "Stored only in this browser", "language.label": "Interface language",
+      "privacy.disclosure": "Reads text you enter on supported AI sites, page titles, and domains only for local history. Data is never uploaded or shared.",
       "summary.label": "Storage summary", "summary.history": "History", "summary.send": "Sent", "summary.draft": "Unsent drafts",
       "settings.title": "Recording", "settings.historyLimit": "History limit", "settings.historyLimitHint": "Most recent first",
       "settings.sendLimit": "Sent history limit", "settings.sendLimitHint": "Text captured immediately before sending", "settings.snapshot": "Auto-save interval",

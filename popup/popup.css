@@ -10,9 +10,12 @@ header { display:flex; align-items:center; gap:12px; }
 .mark { width:40px; height:40px; border:1px solid #41604b; border-radius:13px; display:grid; place-content:center; gap:4px; background:#15241a; }
 .mark span { display:block; width:18px; height:2px; border-radius:2px; background:var(--accent); }
 .mark span:last-child { width:11px; }
+.privacy-note { display:flex; gap:9px; margin-top:16px; padding:10px 11px; border:1px solid color-mix(in srgb,var(--accent) 36%,var(--line)); border-radius:12px; background:color-mix(in srgb,var(--accent) 7%,var(--surface)); }
+.privacy-note svg { width:17px; height:17px; flex:0 0 auto; margin-top:1px; color:var(--accent); }
+.privacy-note p { font-size:10px; line-height:1.5; }
 h1 { font-size:17px; margin:0 0 3px; letter-spacing:.02em; }
 p { color:var(--muted); font-size:11px; margin:0; }
-.summary { display:grid; grid-template-columns:repeat(3,1fr); margin:18px 0; border:1px solid var(--line); border-radius:14px; background:rgba(25,33,28,.78); overflow:hidden; }
+.summary { display:grid; grid-template-columns:repeat(3,1fr); margin:14px 0 18px; border:1px solid var(--line); border-radius:14px; background:rgba(25,33,28,.78); overflow:hidden; }
 .summary div { padding:13px 10px; text-align:center; border-right:1px solid var(--line); }
 .summary div:last-child { border:0; }
 .summary strong,.summary span { display:block; }

@@ -62,6 +62,7 @@
   });
 
   function handleFocus(event) {
+    if (event.composedPath().includes(panel.host)) return;
     const candidate = adapter.resolveEventEditable(event);
     if (!adapter.isEditable(candidate) || adapter.composerScore(candidate) < 4) return;
     activate(candidate);

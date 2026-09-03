@@ -1,0 +1,8 @@
+{
+  "extensionName": {
+    "message": "AI Input History"
+  },
+  "extensionDescription": {
+    "message": "Save AI chat drafts and sent prompts locally, with search, filtering, and fast history recall."
+  }
+}

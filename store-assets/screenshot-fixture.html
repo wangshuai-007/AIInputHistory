@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI Input History Store Screenshot</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%232f8f53'/%3E%3C/svg%3E">
+  <style>
+    *{box-sizing:border-box}body{margin:0;width:100vw;height:100vh;overflow:hidden;background:#f4f7f5;color:#17221a;font-family:"Segoe UI","Microsoft YaHei UI",sans-serif}.shell{display:grid;grid-template-columns:242px 1fr;height:100vh}.side{padding:28px 20px;border-right:1px solid #d8e2db;background:#eef3ef}.brand{display:flex;align-items:center;gap:11px;font-weight:750}.brand img{width:34px;height:34px}.nav{margin-top:38px;display:grid;gap:8px}.nav div{height:38px;padding:0 12px;border-radius:10px;display:flex;align-items:center;gap:10px;color:#66766b;font-size:13px}.nav .active{background:#dcebe1;color:#246e41;font-weight:650}.dot{width:8px;height:8px;border-radius:50%;background:#8a9b90}.active .dot{background:#2f8f53}.main{position:relative;display:flex;flex-direction:column;min-width:0}.top{height:68px;padding:0 34px;border-bottom:1px solid #d8e2db;background:rgba(255,255,255,.74);display:flex;align-items:center;justify-content:space-between}.top strong{font-size:15px}.privacy{font-size:11px;color:#65766b}.chat{flex:1;overflow:hidden;padding:34px 72px 148px}.thread{max-width:720px;margin:auto}.message{max-width:620px;margin-bottom:26px;padding:15px 18px;border-radius:18px;font-size:14px;line-height:1.6}.user{margin-left:auto;background:#dfece3}.assistant{padding-left:0;background:transparent}.assistant::before{content:"AI";display:grid;place-items:center;width:28px;height:28px;margin-bottom:9px;border-radius:9px;background:#17221a;color:#a6efbd;font-size:10px;font-weight:800}.composer-wrap{position:absolute;left:50%;bottom:28px;width:min(760px,calc(100% - 90px));transform:translateX(-50%)}.composer{width:100%;min-height:92px;padding:18px 64px 18px 18px;border:1px solid #bdccc1;border-radius:20px;background:#fff;color:#17221a;box-shadow:0 14px 38px rgba(35,58,42,.12);font:14px/1.5 inherit;resize:none;outline:none}.send{position:absolute;right:13px;bottom:13px;width:38px;height:38px;border:0;border-radius:12px;background:#2f8f53;color:#fff;display:grid;place-items:center}.send svg{width:18px}.caption{position:absolute;left:18px;bottom:-19px;color:#7a8980;font-size:10px}
+  </style>
+</head>
+<body>
+  <div class="shell"><aside class="side"><div class="brand"><img src="../assets/icons/icon-48.png" alt=""><span>AI Workspace</span></div><div class="nav"><div class="active"><span class="dot"></span><span data-copy="newChat">New chat</span></div><div><span class="dot"></span><span data-copy="library">Prompt library</span></div><div><span class="dot"></span><span data-copy="settings">Settings</span></div></div></aside>
+  <main class="main"><header class="top"><strong data-copy="conversation">AI conversation</strong><span class="privacy" data-copy="privacy">Your input history stays in this browser</span></header><section class="chat"><div class="thread"><div class="message user" data-copy="question">Summarize the key decisions from this project discussion.</div><div class="message assistant" data-copy="answer">The project now records drafts locally, consolidates snapshots after sending, and lets you retrieve previous prompts with the arrow keys.</div></div></section>
+  <div class="composer-wrap"><textarea class="composer" aria-label="Send message" data-copy-placeholder="placeholder"></textarea><button class="send" type="button" aria-label="Send"><svg viewBox="0 0 24 24" fill="none"><path d="m6 12 6-6 6 6m-6-6v13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span class="caption" data-copy="caption">Focus the input, then browse and restore local prompt history.</span></div></main></div>
+  <script>
+    const lang = new URLSearchParams(location.search).get("lang") === "zh-CN" ? "zh-CN" : "en";
+    const copy = {
+      en:{newChat:"New chat",library:"Prompt library",settings:"Settings",conversation:"AI conversation",privacy:"Your input history stays in this browser",question:"Summarize the key decisions from this project discussion.",answer:"The project now records drafts locally, consolidates snapshots after sending, and lets you retrieve previous prompts with the arrow keys.",placeholder:"Ask anything…",caption:"Focus the input, then browse and restore local prompt history."},
+      "zh-CN":{newChat:"新对话",library:"提示词库",settings:"设置",conversation:"AI 对话",privacy:"输入历史仅保存在当前浏览器",question:"请总结这次项目讨论中的关键决策。",answer:"项目现在会在本地保存草稿，发送后合并自动快照，并支持使用上下键快速恢复以前的输入。",placeholder:"输入消息…",caption:"聚焦输入框，即可浏览并恢复本地输入历史。"}
+    }[lang];
+    document.documentElement.lang=lang;
+    document.querySelectorAll("[data-copy]").forEach((el)=>{el.textContent=copy[el.dataset.copy]});
+    document.querySelectorAll("[data-copy-placeholder]").forEach((el)=>{el.placeholder=copy[el.dataset.copyPlaceholder]});
+    globalThis.__AIH_TEST_OPEN_SHADOW = true;
+    const memory = globalThis.__testMemory = {
+      aiInputHistorySettings:{historyLimit:100,sendLimit:10,snapshotSeconds:60,shortcut:"Ctrl+R",language:lang,launcherEnabled:true,customDomains:["127.0.0.1"]},
+      aiInputHistoryState:{entries:[
+        {id:"1",text:lang==="en"?"Create a migration checklist for the release":"为这次发布整理一份迁移检查清单",kind:"send",createdAt:Date.now()-62000,site:"127.0.0.1",title:"AI Workspace",fieldKey:"history-1",sessionId:"1"},
+        {id:"2",text:lang==="en"?"Compare the two implementation approaches":"比较这两种实现方案",kind:"send",createdAt:Date.now()-184000,site:"127.0.0.1",title:"AI Workspace",fieldKey:"history-2",sessionId:"2"},
+        {id:"3",text:lang==="en"?"Explain why the save event was missed":"解释为什么没有触发保存事件",kind:"send",createdAt:Date.now()-420000,site:"127.0.0.1",title:"AI Workspace",fieldKey:"history-3",sessionId:"3"}
+      ],drafts:{},positions:{},siteIcons:{}}
+    };
+    const storageListeners=[];
+    globalThis.chrome={runtime:{lastError:null},storage:{onChanged:{addListener(listener){storageListeners.push(listener)}},local:{get(key,callback){callback({[key]:memory[key]})},set(value,callback){const changes=Object.fromEntries(Object.entries(value).map(([key,newValue])=>[key,{oldValue:memory[key],newValue}]));Object.assign(memory,value);storageListeners.forEach((listener)=>listener(changes,"local"));callback()}}}};
+  </script>
+  <script src="../src/history-store.js"></script><script src="../src/i18n.js"></script><script src="../src/site-profiles.js"></script><script>AIInputHistory.SiteProfiles.forSite("chatgpt.com").domains.push("127.0.0.1");</script><script src="../src/site-icon.js"></script><script src="../src/input-adapter.js"></script><script src="../src/history-navigator.js"></script><script src="../src/draggable.js"></script><script src="../src/send-detector.js"></script><script src="../src/site-filter.js"></script><script src="../src/theme-observer.js"></script><script src="../src/history-panel-utils.js"></script><script src="../src/clear-confirmation.js"></script><script src="../src/history-panel.js"></script><script src="../src/content.js"></script>
+  <script>setTimeout(()=>document.querySelector(".composer").focus(),120);setTimeout(()=>document.querySelector("[data-ai-input-history='root']")?.shadowRoot?.querySelector(".launcher")?.click(),520);</script>
+</body>
+</html>

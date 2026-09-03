@@ -1,14 +1,25 @@
 {
   "manifest_version": 3,
-  "name": "AI 输入历史",
-  "version": "1.22.0",
-  "description": "在各类 AI 聊天网站本地保存输入草稿与发送前内容，并提供搜索和快捷切换。",
+  "name": "__MSG_extensionName__",
+  "version": "1.23.0",
+  "description": "__MSG_extensionDescription__",
+  "default_locale": "zh_CN",
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "32": "assets/icons/icon-32.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png"
+  },
   "permissions": ["storage"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "AI 输入历史",
+    "default_title": "__MSG_extensionName__",
+    "default_icon": {
+      "16": "assets/icons/icon-16.png",
+      "32": "assets/icons/icon-32.png"
+    },
     "default_popup": "popup/index.html"
   },
   "content_scripts": [

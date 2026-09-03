@@ -1,0 +1,8 @@
+{
+  "extensionName": {
+    "message": "AI 输入历史"
+  },
+  "extensionDescription": {
+    "message": "在 AI 聊天网站本地保存输入草稿和发送记录，支持搜索、筛选及快捷恢复。"
+  }
+}

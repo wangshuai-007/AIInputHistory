@@ -13,6 +13,7 @@
       <div><h1 data-i18n="app.title">AI 输入历史</h1><p data-i18n="app.localOnly">仅保存在这台浏览器中</p></div>
       <label class="language-control"><span class="sr-only" data-i18n="language.label">界面语言</span><select id="languageSelect" data-i18n-aria-label="language.label"><option value="zh-CN">中文</option><option value="en">English</option></select></label>
     </header>
+    <aside class="privacy-note"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.8 8.1 7 10 4.2-1.9 7-5.4 7-10V6l-7-3Zm-3 9 2 2 4-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><p data-i18n="privacy.disclosure"></p></aside>
     <section class="summary" data-i18n-aria-label="summary.label" aria-label="存储摘要">
       <div><strong id="totalCount">—</strong><span data-i18n="summary.history">历史记录</span></div>
       <div><strong id="sendCount">—</strong><span data-i18n="summary.send">发送记录</span></div>
@@ -40,7 +41,7 @@
       <div id="domainList" class="domain-list"></div>
     </section>
     <div id="status" role="status" aria-live="polite"></div>
-    <footer><button id="clear" type="button" data-i18n="clear.button">清空本地记录</button><span>v1.22.0</span></footer>
+    <footer><button id="clear" type="button" data-i18n="clear.button">清空本地记录</button><span>v1.23.0</span></footer>
   </main>
   <dialog id="clearDialog" aria-labelledby="clearDialogTitle" aria-describedby="clearDialogCopy">
     <div class="dialog-body"><div class="dialog-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5m0 3.5v.5M10.3 4.8 3.7 17a2 2 0 0 0 1.8 3h13a2 2 0 0 0 1.8-3L13.7 4.8a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
