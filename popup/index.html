@@ -39,8 +39,13 @@
       <div id="domainList" class="domain-list"></div>
     </section>
     <div id="status" role="status" aria-live="polite"></div>
-    <footer><button id="clear" type="button">清空本地记录</button><span>v1.20.0</span></footer>
+    <footer><button id="clear" type="button">清空本地记录</button><span>v1.21.0</span></footer>
   </main>
+  <dialog id="clearDialog" aria-labelledby="clearDialogTitle" aria-describedby="clearDialogCopy">
+    <div class="dialog-body"><div class="dialog-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5m0 3.5v.5M10.3 4.8 3.7 17a2 2 0 0 0 1.8 3h13a2 2 0 0 0 1.8-3L13.7 4.8a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <h2 id="clearDialogTitle">清除所有历史记录？</h2><p id="clearDialogCopy">草稿、自动快照和发送记录都将被永久删除，此操作无法撤销。</p><p id="clearDialogError" role="alert"></p></div>
+    <div class="dialog-actions"><button id="cancelClear" type="button">取消</button><button id="confirmClear" class="danger" type="button">确认清除</button></div>
+  </dialog>
   <script src="../src/history-store.js"></script>
   <script src="../src/site-profiles.js"></script>
   <script src="popup.js"></script>

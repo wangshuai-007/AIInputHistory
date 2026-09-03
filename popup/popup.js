@@ -9,6 +9,8 @@
   const domainList = document.querySelector("#domainList");
   const shortcutCapture = document.querySelector("#shortcutCapture");
   const shortcutDisable = document.querySelector("#shortcutDisable");
+  const clearDialog = document.querySelector("#clearDialog");
+  const clearDialogError = document.querySelector("#clearDialogError");
   let [settings, state] = await Promise.all([store.getSettings(), store.getState()]);
   let saveQueue = Promise.resolve();
   let statusTimer = null;
@@ -28,7 +30,10 @@
     launcherToggle.checked ? "悬浮按钮已立即开启" : "悬浮按钮已立即关闭"
   ));
   document.querySelector("#domainForm").addEventListener("submit", addDomain);
-  document.querySelector("#clear").addEventListener("click", clearHistory);
+  document.querySelector("#clear").addEventListener("click", openClearConfirmation);
+  document.querySelector("#cancelClear").addEventListener("click", closeClearConfirmation);
+  document.querySelector("#confirmClear").addEventListener("click", clearHistory);
+  clearDialog.addEventListener("cancel", () => { clearDialogError.textContent = ""; });
   shortcutCapture.addEventListener("click", startShortcutCapture);
   shortcutCapture.addEventListener("keydown", captureShortcut);
   shortcutDisable.addEventListener("click", disableShortcut);
@@ -167,22 +172,30 @@
   }
 
   async function clearHistory() {
-    const button = document.querySelector("#clear");
-    if (button.dataset.confirm !== "true") {
-      button.dataset.confirm = "true";
-      button.textContent = "再次点击确认清空";
-      setTimeout(() => {
-        button.dataset.confirm = "false";
-        button.textContent = "清空本地记录";
-      }, 3000);
-      return;
+    const button = document.querySelector("#confirmClear");
+    button.disabled = true;
+    try {
+      await store.clearHistory();
+      state = await store.getState();
+      renderStats(state);
+      closeClearConfirmation();
+      showStatus("本地记录已清空");
+    } catch (error) {
+      clearDialogError.textContent = "清除失败，请重试。";
+      console.error(error);
+    } finally {
+      button.disabled = false;
     }
-    await store.clearHistory();
-    state = await store.getState();
-    renderStats(state);
-    button.dataset.confirm = "false";
-    button.textContent = "清空本地记录";
-    showStatus("本地记录已清空");
+  }
+
+  function openClearConfirmation() {
+    clearDialogError.textContent = "";
+    if (!clearDialog.open) clearDialog.showModal();
+    document.querySelector("#cancelClear").focus();
+  }
+
+  function closeClearConfirmation() {
+    if (clearDialog.open) clearDialog.close();
   }
 
   function renderStats(current) {

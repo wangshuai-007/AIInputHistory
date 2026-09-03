@@ -1,6 +1,8 @@
 (function initializeHistoryPanel(namespace) {
   "use strict";
 
+  const { badgeMarkup, clampPosition, composerRect, enterIcon, escapeHtml, formatSavedTime, formatTime } = namespace.historyPanelUtils;
+
   const STYLE = `
     :host { all:initial; color-scheme:light dark; --bg:#111713; --surface:#19211c; --line:#304036; --text:#f0f5f1; --muted:#9aaba0; --accent:#7bd89b; --accent-strong:#a6efbd; font-family:"Segoe UI","Microsoft YaHei UI",sans-serif; }
     * { box-sizing:border-box; } button,input { font:inherit; }
@@ -25,6 +27,7 @@
     @keyframes aih-save-pop { 0%,100% { transform:scale(1); } 38% { transform:scale(1.14); background:var(--surface); } }
     @keyframes aih-save-ring { 0% { opacity:.9; transform:scale(.82); } 100% { opacity:0; transform:scale(1.55); } }
     @keyframes aih-panel-saved { 0%,100% { box-shadow:0 22px 60px rgba(0,0,0,.42); } 35% { box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 55%,transparent),0 22px 60px rgba(0,0,0,.42); } }
+    @keyframes aih-dialog-in { from { opacity:0; transform:translateY(5px) scale(.98); } }
     .panel.aih-saved { animation:aih-panel-saved .72s ease-out; }
     .head { position:relative; z-index:2; padding:16px 16px 12px; border-bottom:1px solid var(--line); border-radius:17px 17px 0 0; background:linear-gradient(140deg,var(--surface),var(--bg)); }
     .title-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; cursor:grab; user-select:none; touch-action:none; }
@@ -34,6 +37,20 @@
     .icon-button { width:30px; height:30px; border:0; border-radius:9px; background:transparent; color:var(--muted); cursor:pointer; display:grid; place-items:center; }
     .icon-button:hover { background:var(--surface); color:var(--text); }
     .icon-button svg { width:16px; height:16px; }
+    .clear-dialog { width:min(320px,calc(100vw - 32px)); padding:0; border:1px solid var(--line); border-radius:16px; background:var(--bg); color:var(--text); box-shadow:0 24px 70px rgba(0,0,0,.5); }
+    .clear-dialog::backdrop { background:rgba(4,9,6,.58); backdrop-filter:blur(2px); }
+    .clear-dialog[open] { animation:aih-dialog-in .14s ease-out; }
+    .confirm-body { padding:19px 19px 13px; }
+    .confirm-icon { width:34px; height:34px; margin-bottom:11px; border-radius:11px; display:grid; place-items:center; background:color-mix(in srgb,#ef756b 14%,var(--surface)); color:#ef9f95; }
+    .confirm-icon svg { width:18px; height:18px; }
+    .confirm-title { margin:0 0 6px; font-size:15px; }
+    .confirm-copy { margin:0; color:var(--muted); font-size:12px; line-height:1.55; }
+    .confirm-error { margin-top:8px; color:#ef9f95; font-size:11px; }
+    .confirm-actions { display:flex; justify-content:flex-end; gap:8px; padding:12px 19px 17px; }
+    .confirm-button { height:34px; padding:0 13px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--text); cursor:pointer; font-size:12px; }
+    .confirm-button.danger { border-color:#8d4f49; background:#7a3934; color:#fff; font-weight:700; }
+    .confirm-button:hover { filter:brightness(1.08); }
+    .confirm-button:disabled { opacity:.55; cursor:wait; }
     .search { width:100%; height:40px; padding:0 12px; border:1px solid var(--line); border-radius:11px; background:#0d120f; color:var(--text); }
     .filter-row { display:flex; align-items:center; gap:8px; margin-top:10px; }
     .site-filter-host { position:relative; min-width:0; flex:1; }
@@ -103,6 +120,7 @@
       this.list = this.shadow.querySelector(".list");
       this.savedStatus = this.shadow.querySelector(".saved-status");
       this.launcherTooltip = this.shadow.querySelector(".launcher-tooltip");
+      this.clearConfirmation = new namespace.ClearConfirmation(this.shadow, () => this.clearHistory());
       this.bindEvents();
       this.positionsReady = this.loadPositions();
       this.loadLastSavedTime().catch((error) => console.warn("[AI 输入历史] 读取上次自动保存时间失败", error));
@@ -124,7 +142,12 @@
         <div class="filter-row"><div class="site-filter-host"></div>
         <div class="filters"><button class="filter active" data-filter="all" type="button">全部</button><button class="filter" data-filter="send" type="button">${enterIcon()}发送</button></div></div></header>
         <div class="list" role="listbox"></div><footer class="foot"><span>↑ ↓ 选择 · Enter 插入</span><span class="count">0 条</span></footer>
-      </section>`;
+      </section>
+      <dialog class="clear-dialog" aria-labelledby="aih-clear-title" aria-describedby="aih-clear-copy">
+        <div class="confirm-body"><div class="confirm-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5m0 3.5v.5M10.3 4.8 3.7 17a2 2 0 0 0 1.8 3h13a2 2 0 0 0 1.8-3L13.7 4.8a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <h2 class="confirm-title" id="aih-clear-title">清除所有历史记录？</h2><p class="confirm-copy" id="aih-clear-copy">草稿、自动快照和发送记录都将被永久删除，此操作无法撤销。</p><p class="confirm-error hidden" role="alert"></p></div>
+        <div class="confirm-actions"><button class="confirm-button confirm-cancel" type="button">取消</button><button class="confirm-button danger confirm-accept" type="button">确认清除</button></div>
+      </dialog>`;
     }
 
     bindEvents() {
@@ -151,7 +174,7 @@
       this.launcher.addEventListener("pointerenter", () => this.positionLauncherTooltip());
       this.launcher.addEventListener("focus", () => this.positionLauncherTooltip());
       this.shadow.querySelector(".close").addEventListener("click", () => this.close());
-      this.shadow.querySelector(".clear").addEventListener("click", () => this.clearHistory());
+      this.shadow.querySelector(".clear").addEventListener("click", () => this.openClearConfirmation());
       this.search.addEventListener("input", () => this.refresh());
       this.shadow.querySelectorAll(".filter").forEach((button) => button.addEventListener("click", () => {
         this.sendOnly = button.dataset.filter === "send";
@@ -239,6 +262,7 @@
     }
 
     close() {
+      this.closeClearConfirmation();
       this.siteFilter.setExpanded(false);
       this.panel.classList.add("hidden");
       this.search.value = "";
@@ -246,6 +270,21 @@
 
     isOpen() {
       return !this.panel.classList.contains("hidden");
+    }
+
+    /** Opens the irreversible clear-history confirmation dialog. */
+    openClearConfirmation() {
+      this.clearConfirmation.open();
+    }
+
+    /** Closes the clear-history confirmation dialog without changing data. */
+    closeClearConfirmation() {
+      this.clearConfirmation.close();
+    }
+
+    /** Reports whether the clear-history confirmation is blocking the panel. */
+    isClearConfirmationOpen() {
+      return this.clearConfirmation.isOpen();
     }
 
     isSiteFilterEvent(event) {
@@ -343,62 +382,6 @@
       this.applyPosition("panel", { x: left, y: top });
       this.siteFilter.positionMenu();
     }
-  }
-
-  function escapeHtml(value) {
-    return String(value).replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character]);
-  }
-
-  function badgeMarkup(kind) {
-    if (kind === "send") return `<span class="badge">${enterIcon()}发送</span>`;
-    if (kind === "draft") return '<span class="badge">草稿</span>';
-    return "";
-  }
-
-  function enterIcon() {
-    return '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13 3v4.2c0 1.1-.9 2-2 2H4m3-3-3 3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  }
-
-  function clampPosition(position, element, margin) {
-    const rect = element.getBoundingClientRect();
-    const width = rect.width || (element.classList.contains("launcher") ? 34 : Math.min(400, window.innerWidth - 24));
-    const height = rect.height || (element.classList.contains("launcher") ? 34 : 180);
-    return {
-      x: Math.max(margin, Math.min(window.innerWidth - width - margin, position.x)),
-      y: Math.max(margin, Math.min(window.innerHeight - height - margin, position.y))
-    };
-  }
-
-  function composerRect(target) {
-    const targetRect = target.getBoundingClientRect();
-    let selected = targetRect;
-    let ancestor = target.parentElement;
-    for (let depth = 0; ancestor && depth < 5; depth += 1, ancestor = ancestor.parentElement) {
-      const rect = ancestor.getBoundingClientRect();
-      const reasonableHeight = rect.height <= Math.max(220, targetRect.height + 140);
-      const widerContainer = rect.width >= targetRect.width + 60;
-      if (reasonableHeight && widerContainer && rect.width < window.innerWidth) selected = rect;
-    }
-    return selected;
-  }
-
-  function formatTime(timestamp) {
-    const date = new Date(timestamp);
-    const sameDay = date.toDateString() === new Date().toDateString();
-    const options = sameDay ? { hour: "2-digit", minute: "2-digit" } : { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" };
-    return new Intl.DateTimeFormat("zh-CN", options).format(date);
-  }
-
-  function formatSavedTime(timestamp) {
-    const date = new Date(timestamp);
-    const time = formatClock(timestamp);
-    if (date.toDateString() === new Date().toDateString()) return `今天 ${time}`;
-    const day = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
-    return `${day} ${time}`;
-  }
-
-  function formatClock(timestamp) {
-    return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(new Date(timestamp));
   }
 
   namespace.HistoryPanel = HistoryPanel;

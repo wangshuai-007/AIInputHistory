@@ -138,6 +138,11 @@
   async function handleKeydown(event) {
     if (event.isComposing) return;
     if (panel.isOpen()) {
+      if (event.key === "Escape" && panel.isClearConfirmationOpen()) {
+        event.preventDefault();
+        panel.closeClearConfirmation();
+        return;
+      }
       const siteFilterEvent = panel.isSiteFilterEvent(event);
       if (!siteFilterEvent && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
         event.preventDefault();

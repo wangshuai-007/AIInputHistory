@@ -5,6 +5,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const source = fs.readFileSync(path.join(__dirname, "..", "src", "history-panel.js"), "utf8");
+const utilsSource = fs.readFileSync(path.join(__dirname, "..", "src", "history-panel-utils.js"), "utf8");
+
+function loadPanel(context) {
+  vm.runInNewContext(utilsSource, context);
+  vm.runInNewContext(source, context);
+}
 
 function classList() {
   const values = new Set();
@@ -23,7 +29,7 @@ test("自动快照保存反馈可重复触发并在结束后复位", () => {
     setTimeout(callback) { finishAnimation = callback; return 1; },
     requestAnimationFrame(callback) { callback(); }
   };
-  vm.runInNewContext(source, context);
+  loadPanel(context);
   const panelPrototype = context.globalThis.AIInputHistory.HistoryPanel.prototype;
   const launcherClasses = classList();
   const panelClasses = classList();

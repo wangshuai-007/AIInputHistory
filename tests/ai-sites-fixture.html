@@ -31,7 +31,7 @@
     globalThis.chrome = { runtime:{ lastError:null }, storage:{ local:{ get(key, callback){ callback({[key]:memory[key]}); }, set(value, callback){ Object.assign(memory,value); callback(); } } } };
   </script>
   <script src="../src/history-store.js"></script><script src="../src/site-profiles.js"></script><script src="../src/site-icon.js"></script><script src="../src/input-adapter.js"></script><script src="../src/history-navigator.js"></script>
-  <script src="../src/draggable.js"></script><script src="../src/send-detector.js"></script><script src="../src/site-filter.js"></script><script src="../src/theme-observer.js"></script><script src="../src/history-panel.js"></script><script src="../src/content.js"></script>
+<script src="../src/draggable.js"></script><script src="../src/send-detector.js"></script><script src="../src/site-filter.js"></script><script src="../src/theme-observer.js"></script><script src="../src/history-panel-utils.js"></script><script src="../src/clear-confirmation.js"></script><script src="../src/history-panel.js"></script><script src="../src/content.js"></script>
   <script>
     const pairs = [
       [document.querySelector("copilot-composer").shadowRoot.querySelector("textarea"), document.querySelector("copilot-composer").shadowRoot.querySelector("button")],
