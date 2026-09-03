@@ -6,6 +6,7 @@
 
   const store = new namespace.HistoryStore();
   const settings = await store.getSettings();
+  namespace.i18n.setLanguage(settings.language);
   let liveSettings = settings;
   if (!namespace.SiteProfiles.isAllowedSite(location.hostname, settings.customDomains)) return;
   namespace.SiteProfiles.setSiteIcons(await store.getSiteIcons());
@@ -35,6 +36,7 @@
     if (nextSettings) {
       liveSettings = namespace.historyModel.sanitizeSettings(nextSettings);
       panel.setLauncherEnabled(nextSettings.launcherEnabled !== false);
+      if (changes[namespace.STORAGE_KEYS.settings]?.oldValue?.language !== liveSettings.language) panel.setLanguage(liveSettings.language);
       if (changes[namespace.STORAGE_KEYS.settings]?.oldValue?.snapshotSeconds !== nextSettings.snapshotSeconds) scheduleSnapshots();
     }
     if (changes[namespace.STORAGE_KEYS.state]) {

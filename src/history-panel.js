@@ -108,6 +108,7 @@
       this.host.dataset.aiInputHistory = "root";
       this.shadow = this.host.attachShadow({ mode: globalThis.__AIH_TEST_OPEN_SHADOW === true ? "open" : "closed" });
       this.shadow.innerHTML = `<style>${STYLE}</style>${this.markup()}`;
+      namespace.i18n.localize(this.shadow);
       document.documentElement.appendChild(this.host);
       namespace.observePageTheme(this.host);
       this.launcher = this.shadow.querySelector(".launcher");
@@ -127,26 +128,26 @@
     }
 
     markup() {
-      return `<button class="launcher hidden" type="button" aria-label="打开输入历史；长按移动；右键隐藏" aria-describedby="aih-last-saved">
+      return `<button class="launcher hidden" type="button" data-i18n-aria-label="panel.launcherAria" aria-label="打开输入历史；长按移动；右键隐藏" aria-describedby="aih-last-saved">
         <span class="launcher-symbol launcher-history"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h11M4 12h11M4 17h7M18 15v6m-3-3h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
         <span class="launcher-symbol launcher-save"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 4h11l3 3v13H5V4Zm3 0v6h8V4M8 20v-6h8v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         <span class="saved-status sr-only" aria-live="polite"></span>
-        <span class="launcher-tooltip" id="aih-last-saved" role="tooltip">尚未自动保存</span>
+        <span class="launcher-tooltip" id="aih-last-saved" role="tooltip" data-i18n="panel.neverSaved">尚未自动保存</span>
       </button>
-      <section class="panel hidden" role="dialog" aria-label="输入历史">
-        <header class="head"><div class="title-row"><div><span class="title">输入历史</span><span class="hint">拖动标题移动</span></div><div class="actions">
-          <button class="icon-button clear" type="button" aria-label="一键清除全部历史" title="一键清除全部历史"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-          <button class="icon-button close" type="button" aria-label="关闭" title="关闭"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      <section class="panel hidden" role="dialog" data-i18n-aria-label="panel.aria" aria-label="输入历史">
+        <header class="head"><div class="title-row"><div><span class="title" data-i18n="panel.title">输入历史</span><span class="hint" data-i18n="panel.dragHint">拖动标题移动</span></div><div class="actions">
+          <button class="icon-button clear" type="button" data-i18n-aria-label="panel.clearAria" data-i18n-title="panel.clearAria" aria-label="一键清除全部历史" title="一键清除全部历史"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button class="icon-button close" type="button" data-i18n-aria-label="panel.close" data-i18n-title="panel.close" aria-label="关闭" title="关闭"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
         </div></div>
-        <input class="search" type="search" placeholder="搜索本地历史…" aria-label="搜索输入历史">
+        <input class="search" type="search" data-i18n-placeholder="panel.searchPlaceholder" data-i18n-aria-label="panel.searchAria" placeholder="搜索本地历史…" aria-label="搜索输入历史">
         <div class="filter-row"><div class="site-filter-host"></div>
-        <div class="filters"><button class="filter active" data-filter="all" type="button">全部</button><button class="filter" data-filter="send" type="button">${enterIcon()}发送</button></div></div></header>
-        <div class="list" role="listbox"></div><footer class="foot"><span>↑ ↓ 选择 · Enter 插入</span><span class="count">0 条</span></footer>
+        <div class="filters"><button class="filter active" data-filter="all" type="button" data-i18n="panel.all">全部</button><button class="filter" data-filter="send" type="button">${enterIcon()}<span data-i18n="panel.send">发送</span></button></div></div></header>
+        <div class="list" role="listbox"></div><footer class="foot"><span data-i18n="panel.footer">↑ ↓ 选择 · Enter 插入</span><span class="count"></span></footer>
       </section>
       <dialog class="clear-dialog" aria-labelledby="aih-clear-title" aria-describedby="aih-clear-copy">
         <div class="confirm-body"><div class="confirm-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5m0 3.5v.5M10.3 4.8 3.7 17a2 2 0 0 0 1.8 3h13a2 2 0 0 0 1.8-3L13.7 4.8a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-        <h2 class="confirm-title" id="aih-clear-title">清除所有历史记录？</h2><p class="confirm-copy" id="aih-clear-copy">草稿、自动快照和发送记录都将被永久删除，此操作无法撤销。</p><p class="confirm-error hidden" role="alert"></p></div>
-        <div class="confirm-actions"><button class="confirm-button confirm-cancel" type="button">取消</button><button class="confirm-button danger confirm-accept" type="button">确认清除</button></div>
+        <h2 class="confirm-title" id="aih-clear-title" data-i18n="clear.title">清除所有历史记录？</h2><p class="confirm-copy" id="aih-clear-copy" data-i18n="clear.copy">草稿、自动快照和发送记录都将被永久删除，此操作无法撤销。</p><p class="confirm-error hidden" role="alert"></p></div>
+        <div class="confirm-actions"><button class="confirm-button confirm-cancel" type="button" data-i18n="clear.cancel">取消</button><button class="confirm-button danger confirm-accept" type="button" data-i18n="clear.confirm">确认清除</button></div>
       </dialog>`;
     }
 
@@ -198,6 +199,15 @@
       this.launcher.classList.toggle("hidden", !enabled || !this.target);
     }
 
+    /** Applies a new interface language without rebuilding the panel. */
+    setLanguage(language) {
+      namespace.i18n.setLanguage(language);
+      namespace.i18n.localize(this.shadow);
+      this.siteFilter.refreshLabels();
+      this.setLastSavedAt(this.lastSavedAt);
+      this.render();
+    }
+
     showSavedFeedback(savedAt = Date.now()) {
       this.setLastSavedAt(savedAt);
       if (!this.launcherEnabled && !this.isOpen()) return;
@@ -208,7 +218,7 @@
       if (this.launcherEnabled && this.target) this.launcher.classList.add("aih-saved");
       if (this.isOpen()) this.panel.classList.add("aih-saved");
       this.savedStatus.textContent = "";
-      requestAnimationFrame(() => { this.savedStatus.textContent = "自动快照已保存"; });
+      requestAnimationFrame(() => { this.savedStatus.textContent = namespace.i18n.t("panel.savedLive"); });
       this.savedFeedbackTimer = setTimeout(() => {
         this.launcher.classList.remove("aih-saved");
         this.panel.classList.remove("aih-saved");
@@ -219,8 +229,8 @@
     setLastSavedAt(savedAt) {
       this.lastSavedAt = Number(savedAt) || 0;
       this.launcherTooltip.textContent = this.lastSavedAt
-        ? `上次自动保存：${formatSavedTime(this.lastSavedAt)}`
-        : "尚未自动保存";
+        ? namespace.i18n.t("panel.lastSaved", { time: formatSavedTime(this.lastSavedAt) })
+        : namespace.i18n.t("panel.neverSaved");
     }
 
     /** Reads the latest automatic snapshot time from local extension storage. */
@@ -300,13 +310,13 @@
     }
 
     render() {
-      this.shadow.querySelector(".count").textContent = `${this.items.length} 条`;
+      this.shadow.querySelector(".count").textContent = namespace.i18n.t("panel.count", { count: this.items.length });
       if (!this.items.length) {
-        this.list.innerHTML = `<div class="empty">暂无匹配记录<br>输入内容按设置的秒数保存，确认实际发送后会特殊标记。</div>`;
+        this.list.innerHTML = `<div class="empty">${escapeHtml(namespace.i18n.t("panel.empty")).replace("\n", "<br>")}</div>`;
         return;
       }
       this.list.innerHTML = this.items.map((entry, index) => `<button class="item ${index === this.selectedIndex ? "selected" : ""}" type="button" role="option" aria-selected="${index === this.selectedIndex}" data-index="${index}">
-        <span class="item-top">${badgeMarkup(entry.kind)}<span class="time">${formatTime(entry.createdAt)}</span><span class="site">${escapeHtml(entry.site || "本地")}</span></span>
+        <span class="item-top">${badgeMarkup(entry.kind)}<span class="time">${formatTime(entry.createdAt)}</span><span class="site">${escapeHtml(entry.site || namespace.i18n.t("panel.local"))}</span></span>
         <span class="content">${escapeHtml(entry.text)}</span></button>`).join("");
     }
 

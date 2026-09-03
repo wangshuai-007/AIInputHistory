@@ -6,6 +6,7 @@
       this.root = root;
       this.currentSite = currentSite;
       this.selectedSite = currentSite;
+      this.options = orderSites(currentSite, []);
       this.onChange = onChange;
       this.onExpanded = onExpanded;
       this.root.innerHTML = `<button class="site-trigger" type="button" aria-haspopup="listbox" aria-expanded="false"></button><div class="site-menu hidden" role="listbox"></div>`;
@@ -21,6 +22,12 @@
       this.menu.innerHTML = this.options.map((site) => this.optionMarkup(site)).join("");
       this.updateTrigger();
       if (!this.menu.classList.contains("hidden")) this.positionMenu();
+    }
+
+    /** Re-renders site names after the interface language changes. */
+    refreshLabels() {
+      this.menu.innerHTML = this.options.map((site) => this.optionMarkup(site)).join("");
+      this.updateTrigger();
     }
 
     select(site) {
@@ -91,14 +98,14 @@
     }
 
     triggerLabel(site) {
-      if (site === "*") return "全部网站";
+      if (site === "*") return namespace.i18n.t("filter.all");
       const name = namespace.SiteProfiles.displayName(site);
-      return site === this.currentSite ? `当前 · ${name}` : name;
+      return site === this.currentSite ? namespace.i18n.t("filter.current", { name }) : name;
     }
 
     optionMarkup(site) {
       const name = namespace.SiteProfiles.displayName(site);
-      const detail = site === "*" ? "跨站点历史" : site;
+      const detail = site === "*" ? namespace.i18n.t("filter.crossSite") : site;
       return `<button class="site-option" type="button" role="option" data-site="${escapeHtml(site)}">${namespace.SiteProfiles.icon(site)}<span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(detail)}</small></span></button>`;
     }
   }

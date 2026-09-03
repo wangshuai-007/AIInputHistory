@@ -6,8 +6,8 @@
   }
 
   function badgeMarkup(kind) {
-    if (kind === "send") return `<span class="badge">${enterIcon()}发送</span>`;
-    if (kind === "draft") return '<span class="badge">草稿</span>';
+    if (kind === "send") return `<span class="badge">${enterIcon()}${namespace.i18n.t("panel.send")}</span>`;
+    if (kind === "draft") return `<span class="badge">${namespace.i18n.t("panel.draft")}</span>`;
     return "";
   }
 
@@ -42,14 +42,14 @@
     const date = new Date(timestamp);
     const sameDay = date.toDateString() === new Date().toDateString();
     const options = sameDay ? { hour: "2-digit", minute: "2-digit" } : { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" };
-    return new Intl.DateTimeFormat("zh-CN", options).format(date);
+    return new Intl.DateTimeFormat(namespace.i18n.locale(), options).format(date);
   }
 
   function formatSavedTime(timestamp) {
     const date = new Date(timestamp);
-    const time = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date);
-    if (date.toDateString() === new Date().toDateString()) return `今天 ${time}`;
-    const day = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+    const time = new Intl.DateTimeFormat(namespace.i18n.locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date);
+    if (date.toDateString() === new Date().toDateString()) return namespace.i18n.t("panel.today", { time });
+    const day = new Intl.DateTimeFormat(namespace.i18n.locale(), { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
     return `${day} ${time}`;
   }
 

@@ -5,6 +5,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const source = fs.readFileSync(path.join(__dirname, "..", "src", "clear-confirmation.js"), "utf8");
+const i18nSource = fs.readFileSync(path.join(__dirname, "..", "src", "i18n.js"), "utf8");
 
 function classes() {
   const values = new Set(["hidden"]);
@@ -20,6 +21,7 @@ test("清除历史只在确认弹窗中确认后执行", async () => {
   const root = { querySelector(selector) { return ({ ".clear-dialog": dialog, ".confirm-error": error, ".confirm-cancel": cancel, ".confirm-accept": accept })[selector]; } };
   let clearCount = 0;
   const context = { globalThis: {}, console };
+  vm.runInNewContext(i18nSource, context);
   vm.runInNewContext(source, context);
   const confirmation = new context.globalThis.AIInputHistory.ClearConfirmation(root, async () => { clearCount += 1; });
 

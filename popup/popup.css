@@ -4,6 +4,9 @@ button,input { font:inherit; }
 body { margin:0; width:360px; background:radial-gradient(circle at 90% 0,#253c2d 0,transparent 38%),var(--bg); color:var(--text); }
 main { padding:20px; }
 header { display:flex; align-items:center; gap:12px; }
+.language-control { min-height:0; margin-left:auto; border:0; display:block; }
+.language-control select { height:30px; padding:0 25px 0 9px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--text); cursor:pointer; font-size:10px; }
+.sr-only { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important; }
 .mark { width:40px; height:40px; border:1px solid #41604b; border-radius:13px; display:grid; place-content:center; gap:4px; background:#15241a; }
 .mark span { display:block; width:18px; height:2px; border-radius:2px; background:var(--accent); }
 .mark span:last-child { width:11px; }

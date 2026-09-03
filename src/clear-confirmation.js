@@ -38,7 +38,7 @@
         await this.onConfirm();
         this.close();
       } catch (error) {
-        this.error.textContent = "清除失败，请重试。";
+        this.error.textContent = namespace.i18n.t("clear.error");
         this.error.classList.remove("hidden");
         console.warn("[AI 输入历史] 清除历史失败", error);
       } finally {

@@ -10,6 +10,7 @@ function load(relativePath, context) {
 }
 
 const context = { globalThis: {} };
+load(path.join("src", "i18n.js"), context);
 load(path.join("src", "site-profiles.js"), context);
 load(path.join("src", "site-filter.js"), context);
 const profiles = context.globalThis.AIInputHistory.SiteProfiles;
@@ -35,6 +36,14 @@ test("AI 站点图标使用对应的本地品牌资源", () => {
   assert.match(profiles.icon("aistudio.google.com"), /ai-logo aistudio/);
   assert.match(profiles.icon("chat.deepseek.com"), /ai-logo deepseek/);
   assert.match(profiles.icon("chatgpt.com"), /ai-logo chatgpt/);
+});
+
+test("中文品牌名会随界面语言切换", () => {
+  context.globalThis.AIInputHistory.i18n.setLanguage("en");
+  assert.equal(profiles.displayName("doubao.com"), "Doubao");
+  assert.equal(profiles.displayName("yuanbao.tencent.com"), "Tencent Yuanbao");
+  context.globalThis.AIInputHistory.i18n.setLanguage("zh-CN");
+  assert.equal(profiles.displayName("doubao.com"), "豆包");
 });
 
 test("每个已适配站点都包含本地官方图标资源", () => {

@@ -29,24 +29,28 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
   const elements = Object.fromEntries([
     "#historyLimit", "#sendLimit", "#snapshotSeconds", "#launcherEnabled", "#domainInput",
     "#domainList", "#domainForm", "#clear", "#status", "#totalCount", "#sendCount", "#draftCount",
-    "#shortcutCapture", "#shortcutDisable", "#clearDialog", "#clearDialogError", "#cancelClear", "#confirmClear"
+    "#shortcutCapture", "#shortcutDisable", "#languageSelect", "#clearDialog", "#clearDialogError", "#cancelClear", "#confirmClear"
   ].map((selector) => [selector, element()]));
   const saves = [];
   let clearCount = 0;
   class HistoryStore {
     async getSettings() {
-      return { historyLimit: 100, sendLimit: 10, snapshotSeconds: 60, shortcut: "Ctrl+R", launcherEnabled: true, customDomains: [] };
+      return { historyLimit: 100, sendLimit: 10, snapshotSeconds: 60, shortcut: "Ctrl+R", language: "zh-CN", launcherEnabled: true, customDomains: [] };
     }
     async getState() { return { entries: [], drafts: {} }; }
     async saveSettings(settings) { saves.push(settings); return { ...settings, snapshotSeconds: Number(settings.snapshotSeconds) }; }
     async clearHistory() { clearCount += 1; }
   }
   const context = {
-    AIInputHistory: { HistoryStore, historyModel: {
+    AIInputHistory: { HistoryStore, i18n: (() => {
+      let language = "zh-CN";
+      return { setLanguage(value) { language = value === "en" ? "en" : "zh-CN"; }, language: () => language, localize() {}, t: (key) => key };
+    })(), historyModel: {
       shortcutFromEvent(event) { return event.ctrlKey && event.code === "KeyK" ? "Ctrl+K" : ""; },
       normalizeDomain() { return ""; }
     } },
     document: {
+      documentElement: { lang: "" },
       querySelector: (selector) => elements[selector],
       createElement: () => element(),
       createTextNode: (text) => ({ text })
@@ -70,6 +74,12 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
   shortcutCapture.listeners.keydown({ key: "k", code: "KeyK", ctrlKey: true, preventDefault() {}, stopPropagation() {} });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(saves.at(-1).shortcut, "Ctrl+K");
+
+  elements["#languageSelect"].value = "en";
+  elements["#languageSelect"].listeners.change();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(saves.at(-1).language, "en");
+  assert.equal(context.document.documentElement.lang, "en");
 
   elements["#clear"].listeners.click();
   assert.equal(elements["#clearDialog"].open, true);

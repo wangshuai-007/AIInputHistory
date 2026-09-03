@@ -6,8 +6,10 @@ const assert = require("node:assert/strict");
 
 const source = fs.readFileSync(path.join(__dirname, "..", "src", "history-panel.js"), "utf8");
 const utilsSource = fs.readFileSync(path.join(__dirname, "..", "src", "history-panel-utils.js"), "utf8");
+const i18nSource = fs.readFileSync(path.join(__dirname, "..", "src", "i18n.js"), "utf8");
 
 function loadPanel(context) {
+  vm.runInNewContext(i18nSource, context);
   vm.runInNewContext(utilsSource, context);
   vm.runInNewContext(source, context);
 }

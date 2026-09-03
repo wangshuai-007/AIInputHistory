@@ -66,8 +66,9 @@
   }
 
   function displayName(site) {
-    if (site === "*") return "全部网站";
-    return forSite(site)?.name || site;
+    if (site === "*") return namespace.i18n.t("filter.all");
+    const item = forSite(site);
+    return item ? namespace.i18n.t(`site.${item.id}`, {}, item.name) : site;
   }
 
   function isAllowedSite(site, customDomains = []) {

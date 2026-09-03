@@ -9,9 +9,11 @@
   const domainList = document.querySelector("#domainList");
   const shortcutCapture = document.querySelector("#shortcutCapture");
   const shortcutDisable = document.querySelector("#shortcutDisable");
+  const languageSelect = document.querySelector("#languageSelect");
   const clearDialog = document.querySelector("#clearDialog");
   const clearDialogError = document.querySelector("#clearDialogError");
   let [settings, state] = await Promise.all([store.getSettings(), store.getState()]);
+  namespace.i18n.setLanguage(settings.language);
   let saveQueue = Promise.resolve();
   let statusTimer = null;
   let capturingShortcut = false;
@@ -20,15 +22,16 @@
     const input = document.querySelector(`#${name}`);
     input.value = settings[name];
     input.addEventListener("input", () => {
-      if (input.value !== "" && input.validity.valid) persistSettings({ [name]: input.value }, "设置已保存并立即生效", false);
+      if (input.value !== "" && input.validity.valid) persistSettings({ [name]: input.value }, namespace.i18n.t("status.saved"), false);
     });
-    input.addEventListener("change", () => persistSettings({ [name]: input.value }, "设置已保存并立即生效"));
+    input.addEventListener("change", () => persistSettings({ [name]: input.value }, namespace.i18n.t("status.saved")));
   });
   launcherToggle.checked = settings.launcherEnabled;
   launcherToggle.addEventListener("change", () => persistSettings(
     { launcherEnabled: launcherToggle.checked },
-    launcherToggle.checked ? "悬浮按钮已立即开启" : "悬浮按钮已立即关闭"
+    namespace.i18n.t(launcherToggle.checked ? "status.launcherOn" : "status.launcherOff")
   ));
+  languageSelect.addEventListener("change", changeLanguage);
   document.querySelector("#domainForm").addEventListener("submit", addDomain);
   document.querySelector("#clear").addEventListener("click", openClearConfirmation);
   document.querySelector("#cancelClear").addEventListener("click", closeClearConfirmation);
@@ -38,8 +41,7 @@
   shortcutCapture.addEventListener("keydown", captureShortcut);
   shortcutDisable.addEventListener("click", disableShortcut);
   renderStats(state);
-  renderDomains();
-  renderShortcut(settings.shortcut);
+  applyLanguage();
 
   function persistSettings(patch, message, normalizeInputs = true) {
     saveQueue = saveQueue.then(async () => {
@@ -47,47 +49,61 @@
         settings = await store.saveSettings({ ...settings, ...patch });
         if (normalizeInputs) numericFields.forEach((name) => { document.querySelector(`#${name}`).value = settings[name]; });
         launcherToggle.checked = settings.launcherEnabled;
-        renderDomains();
-        if (!capturingShortcut) renderShortcut(settings.shortcut);
+        if (patch.language) namespace.i18n.setLanguage(settings.language);
+        applyLanguage();
         showStatus(message);
       } catch (error) {
-        showStatus("保存失败，请重试", true);
+        showStatus(namespace.i18n.t("status.saveFailed"), true);
         console.error(error);
       }
     });
     return saveQueue;
   }
 
+  function changeLanguage() {
+    namespace.i18n.setLanguage(languageSelect.value);
+    applyLanguage();
+    persistSettings({ language: languageSelect.value }, namespace.i18n.t("status.saved"));
+  }
+
+  function applyLanguage() {
+    document.documentElement.lang = namespace.i18n.language();
+    namespace.i18n.localize(document);
+    languageSelect.value = namespace.i18n.language();
+    renderDomains();
+    if (!capturingShortcut) renderShortcut(settings.shortcut);
+  }
+
   async function addDomain(event) {
     event.preventDefault();
     const domain = namespace.historyModel.normalizeDomain(domainInput.value);
     if (!domain) {
-      showStatus("请输入有效域名，例如 ai.example.com", true);
+      showStatus(namespace.i18n.t("domains.invalid"), true);
       return;
     }
     if (namespace.SiteProfiles.forSite(domain)) {
-      showStatus("该 AI 网站已默认支持，无需添加");
+      showStatus(namespace.i18n.t("domains.builtin"));
       return;
     }
     if (settings.customDomains.includes(domain)) {
-      showStatus("该域名已添加");
+      showStatus(namespace.i18n.t("domains.exists"));
       return;
     }
     settings = { ...settings, customDomains: [...settings.customDomains, domain] };
     domainInput.value = "";
-    await persistSettings({ customDomains: settings.customDomains }, "域名已添加，刷新该网站后生效");
+    await persistSettings({ customDomains: settings.customDomains }, namespace.i18n.t("domains.added"));
   }
 
   async function removeDomain(domain) {
     settings = { ...settings, customDomains: settings.customDomains.filter((item) => item !== domain) };
-    await persistSettings({ customDomains: settings.customDomains }, "域名已移除，刷新页面后停止追踪");
+    await persistSettings({ customDomains: settings.customDomains }, namespace.i18n.t("domains.removed"));
   }
 
   function startShortcutCapture() {
     capturingShortcut = true;
     shortcutCapture.classList.add("capturing");
-    shortcutCapture.setAttribute("aria-label", "正在录制快捷键，请按组合键");
-    renderShortcutTokens([], "请按组合键…");
+    shortcutCapture.setAttribute("aria-label", namespace.i18n.t("shortcut.recordingAria"));
+    renderShortcutTokens([], namespace.i18n.t("shortcut.press"));
   }
 
   function captureShortcut(event) {
@@ -97,35 +113,35 @@
     if (event.key === "Escape") {
       stopShortcutCapture();
       renderShortcut(settings.shortcut);
-      showStatus("已取消快捷键录制");
+      showStatus(namespace.i18n.t("shortcut.cancelled"));
       return;
     }
     const shortcut = namespace.historyModel.shortcutFromEvent(event);
     if (!shortcut) {
       const modifiers = [event.ctrlKey && "Ctrl", event.altKey && "Alt", event.shiftKey && "Shift", event.metaKey && "Meta"].filter(Boolean);
-      renderShortcutTokens(modifiers, modifiers.length ? "继续按一个按键…" : "需包含修饰键");
+      renderShortcutTokens(modifiers, namespace.i18n.t(modifiers.length ? "shortcut.continue" : "shortcut.modifier"));
       return;
     }
     stopShortcutCapture();
     renderShortcut(shortcut);
-    persistSettings({ shortcut }, "快捷键已更新并立即生效");
+    persistSettings({ shortcut }, namespace.i18n.t("shortcut.updated"));
   }
 
   function disableShortcut() {
     stopShortcutCapture();
     renderShortcut("");
-    persistSettings({ shortcut: "" }, "快捷键已停用");
+    persistSettings({ shortcut: "" }, namespace.i18n.t("shortcut.disabled"));
   }
 
   function stopShortcutCapture() {
     capturingShortcut = false;
     shortcutCapture.classList.remove("capturing");
-    shortcutCapture.setAttribute("aria-label", "设置打开历史快捷键");
+    shortcutCapture.setAttribute("aria-label", namespace.i18n.t("shortcut.aria"));
   }
 
   function renderShortcut(shortcut) {
     shortcutDisable.disabled = !shortcut;
-    renderShortcutTokens(shortcut ? shortcut.split("+") : [], shortcut ? "" : "未启用 · 点击设置");
+    renderShortcutTokens(shortcut ? shortcut.split("+") : [], shortcut ? "" : namespace.i18n.t("shortcut.empty"));
   }
 
   function renderShortcutTokens(tokens, placeholder) {
@@ -145,7 +161,7 @@
   }
 
   function shortcutTokenLabel(token) {
-    return ({ Meta: "Win/⌘", Space: "空格", Plus: "+", Minus: "−" })[token] || token;
+    return ({ Meta: "Win/⌘", Space: namespace.i18n.t("shortcut.space"), Plus: "+", Minus: "−" })[token] || token;
   }
 
   function renderDomains() {
@@ -153,7 +169,7 @@
     if (!settings.customDomains.length) {
       const empty = document.createElement("span");
       empty.className = "domain-empty";
-      empty.textContent = "尚未添加自定义域名";
+      empty.textContent = namespace.i18n.t("domains.empty");
       domainList.appendChild(empty);
       return;
     }
@@ -163,7 +179,7 @@
       chip.append(document.createTextNode(domain));
       const remove = document.createElement("button");
       remove.type = "button";
-      remove.setAttribute("aria-label", `移除 ${domain}`);
+      remove.setAttribute("aria-label", namespace.i18n.t("domains.remove", { domain }));
       remove.textContent = "×";
       remove.addEventListener("click", () => removeDomain(domain));
       chip.appendChild(remove);
@@ -179,9 +195,9 @@
       state = await store.getState();
       renderStats(state);
       closeClearConfirmation();
-      showStatus("本地记录已清空");
+      showStatus(namespace.i18n.t("status.cleared"));
     } catch (error) {
-      clearDialogError.textContent = "清除失败，请重试。";
+      clearDialogError.textContent = namespace.i18n.t("clear.error");
       console.error(error);
     } finally {
       button.disabled = false;

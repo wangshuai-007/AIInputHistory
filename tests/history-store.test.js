@@ -73,7 +73,7 @@ test("可读取当前网站最近一次自动保存时间", () => {
 
 test("设置值被限制在安全范围", () => {
   const settings = sanitizeSettings({ historyLimit: 9999, enterLimit: 0, snapshotMinutes: "5" });
-  assert.deepEqual(JSON.parse(JSON.stringify(settings)), { historyLimit: 500, sendLimit: 1, snapshotSeconds: 300, shortcut: "Ctrl+R", launcherEnabled: true, customDomains: [] });
+  assert.deepEqual(JSON.parse(JSON.stringify(settings)), { historyLimit: 500, sendLimit: 1, snapshotSeconds: 300, shortcut: "Ctrl+R", language: "zh-CN", launcherEnabled: true, customDomains: [] });
   assert.equal(sanitizeSettings({ snapshotSeconds: 5 }).snapshotSeconds, 5);
 });
 
@@ -84,6 +84,7 @@ test("快捷键支持自定义、匹配和停用", () => {
   assert.equal(normalizeShortcut(""), "");
   assert.equal(sanitizeSettings({ shortcut: "" }).shortcut, "");
   assert.equal(sanitizeSettings({ shortcut: "Alt+H" }).shortcut, "Alt+H");
+  assert.equal(sanitizeSettings({ language: "en" }).language, "en");
 });
 
 test("自定义域名会被规范化并去重", () => {

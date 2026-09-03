@@ -3,50 +3,52 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>AI 输入历史</title>
+  <title data-i18n="app.title">AI 输入历史</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <main>
     <header>
       <div class="mark" aria-hidden="true"><span></span><span></span><span></span></div>
-      <div><h1>AI 输入历史</h1><p>仅保存在这台浏览器中</p></div>
+      <div><h1 data-i18n="app.title">AI 输入历史</h1><p data-i18n="app.localOnly">仅保存在这台浏览器中</p></div>
+      <label class="language-control"><span class="sr-only" data-i18n="language.label">界面语言</span><select id="languageSelect" data-i18n-aria-label="language.label"><option value="zh-CN">中文</option><option value="en">English</option></select></label>
     </header>
-    <section class="summary" aria-label="存储摘要">
-      <div><strong id="totalCount">—</strong><span>历史记录</span></div>
-      <div><strong id="sendCount">—</strong><span>发送记录</span></div>
-      <div><strong id="draftCount">—</strong><span>未发送草稿</span></div>
+    <section class="summary" data-i18n-aria-label="summary.label" aria-label="存储摘要">
+      <div><strong id="totalCount">—</strong><span data-i18n="summary.history">历史记录</span></div>
+      <div><strong id="sendCount">—</strong><span data-i18n="summary.send">发送记录</span></div>
+      <div><strong id="draftCount">—</strong><span data-i18n="summary.draft">未发送草稿</span></div>
     </section>
     <section class="settings">
-      <h2>记录设置</h2>
-      <label><span>历史上限<small>最近输入，按时间倒序</small></span><input id="historyLimit" type="number" min="20" max="500" step="10"></label>
-      <label><span>发送记录上限<small>确认实际发送前的内容</small></span><input id="sendLimit" type="number" min="1" max="50"></label>
-      <label><span>自动快照间隔<small>单位：秒，范围 1–3600</small></span><input id="snapshotSeconds" type="number" min="1" max="3600" step="1"></label>
-      <div class="setting-row"><span>显示悬浮按钮<small>右键隐藏后可在这里重新打开</small></span><label class="switch"><input id="launcherEnabled" type="checkbox"><span aria-hidden="true"></span></label></div>
+      <h2 data-i18n="settings.title">记录设置</h2>
+      <label><span><span data-i18n="settings.historyLimit">历史上限</span><small data-i18n="settings.historyLimitHint">最近输入，按时间倒序</small></span><input id="historyLimit" type="number" min="20" max="500" step="10"></label>
+      <label><span><span data-i18n="settings.sendLimit">发送记录上限</span><small data-i18n="settings.sendLimitHint">确认实际发送前的内容</small></span><input id="sendLimit" type="number" min="1" max="50"></label>
+      <label><span><span data-i18n="settings.snapshot">自动快照间隔</span><small data-i18n="settings.snapshotHint">单位：秒，范围 1–3600</small></span><input id="snapshotSeconds" type="number" min="1" max="3600" step="1"></label>
+      <div class="setting-row"><span><span data-i18n="settings.launcher">显示悬浮按钮</span><small data-i18n="settings.launcherHint">右键隐藏后可在这里重新打开</small></span><label class="switch"><input id="launcherEnabled" type="checkbox"><span aria-hidden="true"></span></label></div>
       <div class="shortcut-setting">
-        <div class="shortcut-copy"><span>打开历史</span><small>点击按键框，然后按下组合键</small></div>
+        <div class="shortcut-copy"><span data-i18n="shortcut.title">打开历史</span><small data-i18n="shortcut.hint">点击按键框，然后按下组合键</small></div>
         <div class="shortcut-controls">
-          <button id="shortcutCapture" class="shortcut-capture" type="button" aria-label="设置打开历史快捷键"></button>
-          <button id="shortcutDisable" class="shortcut-disable" type="button">停用</button>
+          <button id="shortcutCapture" class="shortcut-capture" type="button" data-i18n-aria-label="shortcut.aria" aria-label="设置打开历史快捷键"></button>
+          <button id="shortcutDisable" class="shortcut-disable" type="button" data-i18n="shortcut.disable">停用</button>
         </div>
-        <small class="shortcut-help">组合键需包含 Ctrl、Alt、Shift 或 Windows/Command；也可单独使用 F1–F12。按 Esc 取消录制。</small>
+        <small class="shortcut-help" data-i18n="shortcut.help">组合键需包含 Ctrl、Alt、Shift 或 Windows/Command；也可单独使用 F1–F12。按 Esc 取消录制。</small>
       </div>
     </section>
     <section class="domains">
-      <h2>自定义追踪域名</h2>
-      <p>默认只追踪内置 AI 网站。添加域名后，刷新该网站即可启用。</p>
-      <form id="domainForm"><input id="domainInput" type="text" inputmode="url" autocomplete="off" placeholder="例如：ai.example.com" aria-label="自定义域名"><button type="submit">添加</button></form>
+      <h2 data-i18n="domains.title">自定义追踪域名</h2>
+      <p data-i18n="domains.description">默认只追踪内置 AI 网站。添加域名后，刷新该网站即可启用。</p>
+      <form id="domainForm"><input id="domainInput" type="text" inputmode="url" autocomplete="off" data-i18n-placeholder="domains.placeholder" data-i18n-aria-label="domains.aria" placeholder="例如：ai.example.com" aria-label="自定义域名"><button type="submit" data-i18n="domains.add">添加</button></form>
       <div id="domainList" class="domain-list"></div>
     </section>
     <div id="status" role="status" aria-live="polite"></div>
-    <footer><button id="clear" type="button">清空本地记录</button><span>v1.21.0</span></footer>
+    <footer><button id="clear" type="button" data-i18n="clear.button">清空本地记录</button><span>v1.22.0</span></footer>
   </main>
   <dialog id="clearDialog" aria-labelledby="clearDialogTitle" aria-describedby="clearDialogCopy">
     <div class="dialog-body"><div class="dialog-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5m0 3.5v.5M10.3 4.8 3.7 17a2 2 0 0 0 1.8 3h13a2 2 0 0 0 1.8-3L13.7 4.8a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <h2 id="clearDialogTitle">清除所有历史记录？</h2><p id="clearDialogCopy">草稿、自动快照和发送记录都将被永久删除，此操作无法撤销。</p><p id="clearDialogError" role="alert"></p></div>
-    <div class="dialog-actions"><button id="cancelClear" type="button">取消</button><button id="confirmClear" class="danger" type="button">确认清除</button></div>
+    <h2 id="clearDialogTitle" data-i18n="clear.title">清除所有历史记录？</h2><p id="clearDialogCopy" data-i18n="clear.copy">草稿、自动快照和发送记录都将被永久删除，此操作无法撤销。</p><p id="clearDialogError" role="alert"></p></div>
+    <div class="dialog-actions"><button id="cancelClear" type="button" data-i18n="clear.cancel">取消</button><button id="confirmClear" class="danger" type="button" data-i18n="clear.confirm">确认清除</button></div>
   </dialog>
   <script src="../src/history-store.js"></script>
+  <script src="../src/i18n.js"></script>
   <script src="../src/site-profiles.js"></script>
   <script src="popup.js"></script>
 </body>

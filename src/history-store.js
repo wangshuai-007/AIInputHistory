@@ -9,6 +9,7 @@
     sendLimit: 10,
     snapshotSeconds: 60,
     shortcut: DEFAULT_SHORTCUT,
+    language: "zh-CN",
     launcherEnabled: true,
     customDomains: []
   });
@@ -21,6 +22,7 @@
       sendLimit: clampInteger(source.sendLimit ?? source.enterLimit, 1, 50, DEFAULT_SETTINGS.sendLimit),
       snapshotSeconds: clampInteger(snapshotSeconds, 1, 3600, DEFAULT_SETTINGS.snapshotSeconds),
       shortcut: normalizeShortcut(source.shortcut),
+      language: source.language === "en" ? "en" : "zh-CN",
       launcherEnabled: source.launcherEnabled !== false,
       customDomains: [...new Set((Array.isArray(source.customDomains) ? source.customDomains : [])
         .map(normalizeDomain).filter(Boolean))].slice(0, 100)
