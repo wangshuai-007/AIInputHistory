@@ -146,7 +146,8 @@
         panel.closeClearConfirmation();
         return;
       }
-      const siteFilterEvent = panel.isSiteFilterEvent(event);
+      if (event.composedPath().some((node) => node?.classList?.contains("pin-button"))) return;
+        const siteFilterEvent = panel.isSiteFilterEvent(event);
       if (!siteFilterEvent && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
         event.preventDefault();
         panel.moveSelection(event.key === "ArrowUp" ? -1 : 1);

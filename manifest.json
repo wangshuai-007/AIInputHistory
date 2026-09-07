@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
-  "version": "1.23.0",
+  "version": "1.24.0",
   "description": "__MSG_extensionDescription__",
   "default_locale": "zh_CN",
   "icons": {
@@ -38,7 +38,8 @@
         "src/theme-observer.js",
         "src/history-panel-utils.js",
         "src/clear-confirmation.js",
-        "src/history-panel.js",
+        "src/history-panel-style.js",
+      "src/history-panel.js",
         "src/content.js"
       ],
       "run_at": "document_idle",

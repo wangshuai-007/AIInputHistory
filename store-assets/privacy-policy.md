@@ -28,7 +28,7 @@ AI 输入历史是一款仅在浏览器本地工作的扩展，用于保存用�
 
 ### 数据保留和删除
 
-数据会按照用户设置的历史上限保留。用户可以在扩展设置页或页面历史面板中清除全部历史，也可以通过卸载扩展删除扩展本地数据。清除操作不可撤销。
+未固定数据会按照用户设置的历史上限保留。固定消息不会自动淘汰，也不会被清空历史操作删除，需要先解除固定。用户可以在扩展设置页或页面历史面板中清除未固定历史，也可以通过卸载扩展删除全部扩展本地数据。清除操作不可撤销。
 
 ### 权限
 
@@ -41,7 +41,7 @@ AI 输入历史是一款仅在浏览器本地工作的扩展，用于保存用�
 
 ### 联系方式
 
-发布前请将此处替换为开发者支持邮箱：`{{PUBLISHER_EMAIL}}`
+发布前请将此处替换为开发者支持邮箱：`support@wangshuai.app`
 
 ---
 
@@ -71,7 +71,9 @@ The extension does not share user data with the developer, advertising platforms
 
 ### Retention and deletion
 
-Data is retained according to the history limits configured by the user. Users can clear all history from the extension settings or the in-page history panel. Uninstalling the extension also removes extension-local data. Deletion cannot be undone.
+Pinned messages are excluded from automatic retention limits and clear-history actions. Unpin them before deletion. Uninstalling the extension still removes local data.
+
+Unpinned data is retained according to the history limits configured by the user. Users can clear unpinned history from the extension settings or the in-page history panel. Uninstalling the extension also removes extension-local data. Deletion cannot be undone.
 
 ### Permissions
 
@@ -84,4 +86,4 @@ The use of information received by this extension adheres to the Chrome Web Stor
 
 ### Contact
 
-Replace this placeholder with the publisher support email before publishing: `{{PUBLISHER_EMAIL}}`
+Replace this placeholder with the publisher support email before publishing: `support@wangshuai.app`

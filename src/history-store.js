@@ -93,14 +93,14 @@
   function pruneEntries(entries, settings) {
     const limits = sanitizeSettings(settings);
     let sendCount = 0;
+    let historyCount = 0;
     return entries.filter(Boolean).map(normalizeEntry)
       .sort((left, right) => right.createdAt - left.createdAt)
       .filter((entry) => {
-        if (entry.kind !== "send") return true;
-        sendCount += 1;
-        return sendCount <= limits.sendLimit;
-      })
-      .slice(0, limits.historyLimit);
+        if (entry.pinned) return true;
+        if (entry.kind === "send" && ++sendCount > limits.sendLimit) return false;
+        return ++historyCount <= limits.historyLimit;
+      });
   }
 
   /** Removes incremental snapshots from the current composition after its previous send. */
@@ -109,7 +109,7 @@
       .filter((entry) => entry?.kind === "send" && entry.fieldKey === fieldKey)
       .reduce((latest, entry) => Math.max(latest, Number(entry.createdAt) || 0), 0);
     return entries.filter((entry) => {
-      if (entry?.kind !== "snapshot") return true;
+      if (entry?.pinned || entry?.kind !== "snapshot") return true;
       if (sessionId && entry.sessionId) return entry.sessionId !== sessionId;
       return entry.fieldKey !== fieldKey || (Number(entry.createdAt) || 0) <= previousSendAt;
     });
@@ -119,19 +119,20 @@
   function compactSentSnapshots(entries) {
     const sends = entries.filter((entry) => entry?.kind === "send");
     return entries.filter((entry) => {
-      if (entry?.kind !== "snapshot") return true;
+      if (entry?.pinned || entry?.kind !== "snapshot") return true;
       if (entry.sessionId) return !sends.some((send) => send.sessionId && send.sessionId === entry.sessionId);
       return !sends.some((send) => send.fieldKey === entry.fieldKey
         && (Number(send.createdAt) || 0) >= (Number(entry.createdAt) || 0));
     });
   }
 
-  function filterEntries(entries, query, sendOnly, site = "*") {
+  function filterEntries(entries, query, sendOnly, site = "*", pinnedOnly = false) {
     const keyword = String(query || "").trim().toLocaleLowerCase();
     return entries.filter(Boolean).map(normalizeEntry)
       .sort((left, right) => right.createdAt - left.createdAt)
       .filter((entry) => site === "*" || entry.site === site)
       .filter((entry) => !sendOnly || entry.kind === "send")
+      .filter((entry) => !pinnedOnly || entry.pinned)
       .filter((entry) => !keyword || entry.text.toLocaleLowerCase().includes(keyword));
   }
 
@@ -252,13 +253,30 @@
       });
     }
 
-    async getHistory(query, sendOnly, site = "*") {
+    async getHistory(query, sendOnly, site = "*", pinnedOnly = false) {
       const state = await this.getState();
       const drafts = Object.entries(state.drafts).map(([fieldKey, draft]) => ({
         id: `draft:${fieldKey}`, text: draft.text, kind: "draft", createdAt: draft.updatedAt,
         site: draft.site, title: draft.title, fieldKey
       }));
-      return filterEntries([...state.entries, ...drafts], query, sendOnly, site);
+      return filterEntries([...state.entries, ...drafts], query, sendOnly, site, pinnedOnly);
+    }
+
+    /** Pins a stored entry or preserves the displayed draft as an immutable snapshot. */
+    async setPinned(displayedEntry, pinned) {
+      return withStorageLock(async () => {
+        const state = await this.getState();
+        let entry = state.entries.find((item) => item.id === displayedEntry.id);
+        if (!entry && pinned && displayedEntry.kind === "draft") {
+          entry = { ...displayedEntry, id: makeId(), kind: "snapshot" };
+          state.entries.push(entry);
+        }
+        if (!entry) throw new Error("记录已不存在 / Entry no longer exists");
+        entry.pinned = Boolean(pinned);
+        state.entries = pruneEntries(state.entries, await this.getSettings());
+        await storageSet({ [STORAGE_KEY]: state });
+        return entry;
+      });
     }
 
     async getSites() {
@@ -309,7 +327,7 @@
     async clearHistory() {
       await withStorageLock(async () => {
         const state = await this.getState();
-        await storageSet({ [STORAGE_KEY]: { ...state, entries: [], drafts: {} } });
+        await storageSet({ [STORAGE_KEY]: { ...state, entries: state.entries.filter((entry) => entry.pinned), drafts: {} } });
       });
     }
   }
