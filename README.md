@@ -2,6 +2,21 @@
 
 面向 Chrome、Edge 等 Chromium 浏览器的 Manifest V3 扩展。它会识别网页中的聊天输入框，将草稿、定时快照和实际发送前的内容保存在 `chrome.storage.local`，不上传任何输入数据。
 
+## 扩展截图
+
+以下截图展示扩展在演示聊天页面中的历史面板，使用示例数据，不包含真实聊天内容。截图为早期版本，最新版本另支持固定消息。
+
+### 中文界面
+
+![中文输入历史面板：本地搜索、网站筛选和发送记录](store-assets/screenshot-zh-CN-1280x800.png)
+
+<details>
+<summary>查看英文界面</summary>
+
+![英文输入历史面板：本地搜索、网站筛选和发送记录](store-assets/screenshot-en-1280x800.png)
+
+</details>
+
 ## 功能
 
 - 默认只在内置 AI 网站启用；可在扩展设置中添加自定义域名，启用该网站的 `textarea`、`contenteditable` 和聊天文本框追踪。
