@@ -49,8 +49,8 @@
     .confirm-button:hover { filter:brightness(1.08); }
     .confirm-button:disabled { opacity:.55; cursor:wait; }
     .search { width:100%; height:40px; padding:0 12px; border:1px solid var(--line); border-radius:11px; background:#0d120f; color:var(--text); }
-    .filter-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:10px; }
-    .site-filter-host { position:relative; min-width:0; flex:1 0 100%; }
+    .filter-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:10px; }
+    .site-filter-host { position:relative; min-width:120px; flex:1 1 120px; }
     .site-trigger { width:100%; height:32px; border:1px solid var(--line); border-radius:9px; padding:0 8px; background:var(--surface); color:var(--text); display:flex; align-items:center; gap:7px; cursor:pointer; font-size:11px; }
     .site-trigger span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .chevron { width:14px; height:14px; margin-left:auto; flex:0 0 auto; color:var(--muted); }
@@ -65,8 +65,8 @@
     .ai-logo.chatgpt { color:#10a37f; } .ai-logo.claude { color:#d97757; } .ai-logo.aistudio { color:#4285f4; } .ai-logo.deepseek { color:#4d6bfe; }
     .ai-logo.copilot { color:#35a7ff; } .ai-logo.perplexity { color:#20a39e; } .ai-logo.kimi { color:#5b6cff; } .ai-logo.doubao { color:#ff5a69; }
     .ai-logo.yuanbao { color:#1b88ff; } .ai-logo.ernie { color:#2769e8; } .ai-logo.mistral { color:#f28c28; } .ai-logo.poe { color:#5d5fef; } .ai-logo.meta { color:#1877f2; } .ai-logo.you { color:#7a5cff; }
-    .filters { display:flex; gap:7px; }
-    .filter { border:1px solid var(--line); border-radius:999px; padding:5px 10px; color:var(--muted); background:transparent; cursor:pointer; font-size:12px; }
+    .filters { display:flex; flex:0 0 auto; gap:4px; }
+    .filter { border:1px solid var(--line); border-radius:999px; min-height:32px; padding:5px 8px; white-space:nowrap; color:var(--muted); background:transparent; cursor:pointer; font-size:12px; }
     .filter.active { color:#0c1710; background:var(--accent); border-color:var(--accent); font-weight:700; }
     .list { overflow:auto; padding:8px; scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
     .item { width:100%; border:0; border-radius:12px; background:transparent; color:var(--text); padding:11px 12px; text-align:left; cursor:pointer; display:block; }
