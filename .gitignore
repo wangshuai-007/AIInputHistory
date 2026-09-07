@@ -3,6 +3,7 @@ node_modules/
 *.zip
 *.crx
 *.pem
+gha-creds-*.json
 
 # Local HelloAGENTS session state
 .helloagents/sessions/

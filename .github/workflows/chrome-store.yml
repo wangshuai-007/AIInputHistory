@@ -1,0 +1,75 @@
+name: Chrome Web Store
+
+on:
+  push:
+    branches: [main]
+    tags: ['[0-9]*.[0-9]*.[0-9]*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: 测试与打包
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - run: npm test
+      - run: npm run package:store
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: extension-${{ github.sha }}
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: 上传并自动送审
+    needs: check
+    if: github.repository == 'wangshuai-007/AIInputHistory' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: windows-latest
+    timeout-minutes: 15
+    concurrency:
+      group: chrome-store-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CWS_PUBLISHER_ID: 141cde73-f21a-45c1-9134-820d87a53558
+      CWS_EXTENSION_ID: gilopgljmiibhmmenfcomkhniipnepen
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - name: 校验版本、主线和认证配置
+        env:
+          CWS_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.CWS_WORKLOAD_IDENTITY_PROVIDER }}
+        run: node scripts/cws-release.mjs check
+      - run: npm run package:store
+      - name: 获取短期发布凭据
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: gen-lang-client-0197038767
+          workload_identity_provider: ${{ vars.CWS_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: cws-api@gen-lang-client-0197038767.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+          create_credentials_file: false
+      - name: 上传 ZIP，提交审核，通过后自动发布
+        env:
+          CWS_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: node scripts/cws-release.mjs publish
