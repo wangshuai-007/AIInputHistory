@@ -17,9 +17,11 @@
     }
 
     setSites(sites) {
-      this.options = orderSites(this.currentSite, sites);
+      const options = orderSites(this.currentSite, sites);
+      const changed = JSON.stringify(options) !== JSON.stringify(this.options) || !this.menu.children.length;
+      this.options = options;
       if (!this.options.includes(this.selectedSite)) this.selectedSite = this.currentSite;
-      this.menu.innerHTML = this.options.map((site) => this.optionMarkup(site)).join("");
+      if (changed) this.menu.innerHTML = this.options.map((site) => this.optionMarkup(site)).join("");
       this.updateTrigger();
       if (!this.menu.classList.contains("hidden")) this.positionMenu();
     }
@@ -35,6 +37,7 @@
       this.selectedSite = site;
       this.updateTrigger();
       this.setExpanded(false);
+      this.trigger.focus();
       this.onChange(site);
     }
 
@@ -48,6 +51,7 @@
       });
       this.trigger.addEventListener("click", () => this.setExpanded(this.menu.classList.contains("hidden")));
       this.trigger.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") { this.setExpanded(false); return; }
         if (event.key !== "ArrowDown") return;
         event.preventDefault();
         this.setExpanded(true);
@@ -124,8 +128,8 @@
     const availableBelow = viewportHeight - triggerRect.bottom - margin - gap;
     const availableAbove = triggerRect.top - margin - gap;
     const openAbove = availableBelow < 220 && availableAbove > availableBelow;
-    const availableHeight = Math.max(96, openAbove ? availableAbove : availableBelow);
-    const width = Math.min(320, viewportWidth - margin * 2);
+    const availableHeight = Math.max(0, openAbove ? availableAbove : availableBelow);
+    const width = Math.max(0, Math.min(320, viewportWidth - margin * 2));
     const desiredLeft = Math.max(margin, Math.min(triggerRect.left, viewportWidth - margin - width));
     return {
       width: `${width}px`,

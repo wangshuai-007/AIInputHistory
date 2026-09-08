@@ -5,7 +5,7 @@
   const EXCLUDE_PATTERN = /stop|cancel|abort|停止|取消/i;
 
   function didComposerClear(before, after, connected = true) {
-    return Boolean(String(before || "").trim()) && (!connected || !String(after || "").trim());
+    return Boolean(connected && String(before || "").trim()) && !String(after || "").trim();
   }
 
   function getSendButton(target, input) {
@@ -35,40 +35,56 @@
       this.adapter = adapter;
       this.onSend = onSend;
       this.lastEmission = null;
+      this.pendingEnter = null;
     }
 
     watchEnter(event, input, context) {
-      if (event.key !== "Enter" || event.isComposing) return;
+      if (event.key !== "Enter" || event.isComposing || event.repeat || !input || !context) return;
       const text = this.adapter.getText(input);
       if (!text.trim()) return;
+      this.cancelEnter();
       const candidate = { input, text, context, done: false };
+      candidate.onInput = (inputEvent) => {
+        if (["insertLineBreak", "insertParagraph"].includes(inputEvent.inputType)
+          || (this.adapter.getText(input).trim() && this.adapter.getText(input) !== text)) this.cancelEnter();
+      };
+      input.addEventListener?.("input", candidate.onInput);
+      this.pendingEnter = candidate;
       [40, 140, 400, 900].forEach((delay, index, delays) => {
         setTimeout(() => {
           if (candidate.done) return;
           const connected = input.isConnected;
           const current = connected ? this.adapter.getText(input) : "";
-          if (didComposerClear(candidate.text, current, connected)) {
-            candidate.done = true;
+          if (!connected) {
+            this.cancelEnter();
+          } else if (didComposerClear(candidate.text, current, connected)) {
+            this.cancelEnter();
             this.emit(candidate.text, candidate.context, "keyboard");
           } else if (current !== candidate.text) {
-            candidate.done = true;
-          } else if (index === 0 && namespace.SiteProfiles.isSendShortcut(event, context.site)) {
-            candidate.done = true;
-            this.emit(candidate.text, candidate.context, "keyboard-attempt");
+            this.cancelEnter();
           } else if (index === delays.length - 1) {
-            candidate.done = true;
+            this.cancelEnter();
+            if (namespace.SiteProfiles.isSendShortcut(event, context.site)) this.emit(candidate.text, candidate.context, "keyboard-attempt");
           }
         }, delay);
       });
     }
 
+    /** Releases a pending Enter observation after another edit or send event. */
+    cancelEnter() {
+      if (!this.pendingEnter) return;
+      this.pendingEnter.done = true;
+      this.pendingEnter.input.removeEventListener?.("input", this.pendingEnter.onInput);
+      this.pendingEnter = null;
+    }
+
     handleSubmit(event, input, context) {
-      if (!input || !event.target.contains(input)) return;
+      if (!input || !context || !event.target.contains(input)) return;
       this.emitCurrent(input, context, "form");
     }
 
     handlePointerDown(event, input, context) {
-      if (!input) return;
+      if (!input || !context || (event.button != null && event.button !== 0) || event.isPrimary === false) return;
       const path = typeof event.composedPath === "function" ? event.composedPath() : [event.target];
       const button = path.map((target) => getSendButton(target, input)).find(Boolean);
       if (!button) return;
@@ -81,6 +97,7 @@
     }
 
     emit(text, context, source) {
+      this.cancelEnter();
       const fingerprint = `${context.fieldKey}|${text}`;
       const now = Date.now();
       if (this.lastEmission?.fingerprint === fingerprint && now - this.lastEmission.at < 1500) return;

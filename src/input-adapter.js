@@ -2,6 +2,7 @@
   "use strict";
 
   const PROMPT_PATTERN = /(message|prompt|chat|ask|send|reply|question|输入|提问|聊天|消息|发送|回复)/i;
+  const EDITABLE_SELECTOR = "textarea,input[type='text'],input[type='search'],input:not([type]),[contenteditable='true'],[contenteditable='plaintext-only'],[role='textbox']";
 
   function isTextInput(element) {
     return element instanceof HTMLInputElement && ["text", "search"].includes(element.type);
@@ -9,8 +10,8 @@
 
   function resolveEditable(element) {
     if (!(element instanceof Element)) return null;
-    if (element instanceof HTMLTextAreaElement || isTextInput(element) || element.matches("[contenteditable='true'],[role='textbox']")) return element;
-    return element.closest("textarea,input[type='text'],input[type='search'],[contenteditable='true'],[role='textbox']");
+    if (element instanceof HTMLTextAreaElement || isTextInput(element) || element.matches("[contenteditable='true'],[contenteditable='plaintext-only'],[role='textbox']")) return element;
+    return element.closest(EDITABLE_SELECTOR);
   }
 
   function resolveEventEditable(event) {
@@ -24,7 +25,22 @@
 
   function isEditable(element) {
     const editable = resolveEditable(element);
-    return Boolean(editable && !editable.matches("[disabled], [aria-disabled='true']"));
+    if (!editable || editable.matches(":disabled,[disabled],[readonly],[aria-disabled='true'],[aria-readonly='true']")) return false;
+    return editable instanceof HTMLTextAreaElement || isTextInput(editable) || editable.isContentEditable;
+  }
+
+  /** Finds an existing visible composer without changing page focus. */
+  function findComposer(root = document, excludedHost = null) {
+    let focused = root.activeElement;
+    while (focused?.shadowRoot?.activeElement) focused = focused.shadowRoot.activeElement;
+    const candidates = [focused, ...root.querySelectorAll(EDITABLE_SELECTOR)];
+    return candidates.filter((element) => element && element !== excludedHost && !excludedHost?.contains(element))
+      .map((element) => ({ element, score: composerScore(element) }))
+      .filter(({ element, score }) => {
+        const rect = element.getBoundingClientRect();
+        return score >= 4 && element.isConnected && rect.width > 0 && rect.height > 0;
+      })
+      .sort((left, right) => Number(right.element === focused) - Number(left.element === focused) || right.score - left.score)[0]?.element || null;
   }
 
   function composerScore(element) {
@@ -105,5 +121,5 @@
     return `${location.hostname}:${(hash >>> 0).toString(36)}`;
   }
 
-  namespace.InputAdapter = { composerScore, fieldKey, getText, isEditable, resolveEditable, resolveEventEditable, setText };
+  namespace.InputAdapter = { composerScore, fieldKey, findComposer, getText, isEditable, resolveEditable, resolveEventEditable, setText };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

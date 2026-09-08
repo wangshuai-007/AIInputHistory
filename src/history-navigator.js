@@ -13,6 +13,7 @@
       this.index = -1;
       this.original = "";
       this.applying = false;
+      this.loading = null;
       this.loadRevision = (this.loadRevision || 0) + 1;
     }
 
@@ -23,8 +24,16 @@
     /** Moves backward or forward through site history and restores the original text at the newest edge. */
     async move(direction, input, context) {
       if (!input || !context || !["up", "down"].includes(direction)) return false;
-      if (!this.entries) await this.load(input, context);
-      if (!this.entries?.length) return false;
+      const revision = this.loadRevision;
+      if (!this.entries) {
+        this.loading ||= this.load(input, context);
+        try {
+          await this.loading;
+        } finally {
+          if (revision === this.loadRevision) this.loading = null;
+        }
+      }
+      if (revision !== this.loadRevision || !this.entries?.length) return false;
 
       if (direction === "up") {
         this.index = Math.min(this.entries.length - 1, this.index + 1);
@@ -61,7 +70,9 @@
   }
 
   function isCurrentComposition(entry, context) {
-    if (entry.kind === "draft" && entry.fieldKey === context.fieldKey) return true;
+    if (entry.kind === "draft" && entry.fieldKey === context.fieldKey) {
+      return !entry.sessionId || entry.sessionId === context.sessionId;
+    }
     return entry.kind === "snapshot" && entry.sessionId && entry.sessionId === context.sessionId;
   }
 

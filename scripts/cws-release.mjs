@@ -1,17 +1,13 @@
 import { readFile, appendFile } from 'node:fs/promises';
-import { execFileSync } from 'node:child_process';
-import { createClient, submit, validateVersion } from './cws-client.mjs';
+import { createClient, submit } from './cws-client.mjs';
+import { validateReleaseContext, validateVersion } from './cws-validation.mjs';
 
 /** Runs tag validation or the authenticated store submission command. */
 async function main() {
   const manifest = JSON.parse(await readFile('manifest.json', 'utf8'));
   const pkg = JSON.parse(await readFile('package.json', 'utf8'));
   validateVersion(process.env.GITHUB_REF_NAME || '', manifest.version, pkg.version);
-  if (process.env.GITHUB_REPOSITORY !== 'wangshuai-007/AIInputHistory'
-      || process.env.GITHUB_EVENT_NAME !== 'push' || !process.env.GITHUB_REF?.startsWith('refs/tags/')) {
-    throw new Error('只允许原仓库的 tag push 运行发布。');
-  }
-  execFileSync('git', ['merge-base', '--is-ancestor', 'HEAD', 'origin/main']);
+  validateReleaseContext(process.env);
   if (process.argv[2] === 'check') {
     if (!/^projects\/\d+\/locations\/global\/workloadIdentityPools\/[^/]+\/providers\/[^/]+$/.test(process.env.CWS_WORKLOAD_IDENTITY_PROVIDER || '')) {
       throw new Error('请先设置仓库 Actions variable：CWS_WORKLOAD_IDENTITY_PROVIDER。');

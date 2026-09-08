@@ -92,6 +92,8 @@
     .pin-button { position:absolute; right:5px; top:8px; }
     .pin-button[aria-pressed="true"] { color:var(--accent-strong); background:var(--surface); }
     .pin-badge { color:var(--accent-strong); font-size:10px; white-space:nowrap; }
-    .pin-error { color:#ef9f95; padding:0 16px; font-size:12px; }
+    .pin-error { color:var(--text); padding:8px 16px; margin:0; border-left:3px solid #c85147; font-size:12px; }
+    .pin-button:disabled { opacity:.55; cursor:wait; }
+    .head,.foot { flex-shrink:0; }
   `;
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

@@ -17,6 +17,7 @@
   let saveQueue = Promise.resolve();
   let statusTimer = null;
   let capturingShortcut = false;
+  document.querySelector("#extensionVersion").textContent = `v${chrome.runtime.getManifest().version}`;
 
   numericFields.forEach((name) => {
     const input = document.querySelector(`#${name}`);
@@ -42,11 +43,25 @@
   shortcutDisable.addEventListener("click", disableShortcut);
   renderStats(state);
   applyLanguage();
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (changes[namespace.STORAGE_KEYS.state]?.newValue) renderStats(changes[namespace.STORAGE_KEYS.state].newValue);
+    const next = changes[namespace.STORAGE_KEYS.settings]?.newValue;
+    if (!next) return;
+    settings = namespace.historyModel.sanitizeSettings(next);
+    launcherToggle.checked = settings.launcherEnabled;
+    numericFields.forEach((name) => {
+      const input = document.querySelector(`#${name}`);
+      if (document.activeElement !== input) input.value = settings[name];
+    });
+    namespace.i18n.setLanguage(settings.language);
+    applyLanguage();
+  });
 
   function persistSettings(patch, message, normalizeInputs = true) {
     saveQueue = saveQueue.then(async () => {
       try {
-        settings = await store.saveSettings({ ...settings, ...patch });
+        settings = await store.patchSettings(patch);
         if (normalizeInputs) numericFields.forEach((name) => { document.querySelector(`#${name}`).value = settings[name]; });
         launcherToggle.checked = settings.launcherEnabled;
         if (patch.language) namespace.i18n.setLanguage(settings.language);
@@ -226,4 +241,7 @@
     status.style.color = isError ? "#ef9f95" : "";
     statusTimer = setTimeout(() => { status.textContent = ""; }, 2800);
   }
-})(globalThis.AIInputHistory);
+})(globalThis.AIInputHistory).catch((error) => {
+  document.querySelector("#status").textContent = "无法读取扩展设置，请重新打开 / Cannot load settings. Reopen this popup.";
+  console.error("[AI Input History]", error);
+});

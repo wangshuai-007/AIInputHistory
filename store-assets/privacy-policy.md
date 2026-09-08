@@ -20,7 +20,7 @@ AI 输入历史是一款仅在浏览器本地工作的扩展，用于保存用�
 
 这些数据仅用于提供扩展明确展示的本地输入历史功能。历史、草稿和设置保存在用户浏览器的 `chrome.storage.local` 中。扩展没有开发者服务器，不会把输入内容、历史记录或设置上传给开发者，也不会用于广告、画像、分析或出售。
 
-扩展可能从用户当前访问的网站请求该网站自己的 favicon。该请求只用于显示网站图标，不会发送给开发者或其他第三方。
+扩展可能请求当前网站的同源 favicon，仅用于显示图标；请求不携带 Cookie 或来源地址，不跟随重定向，也不会请求其他域名的图标。
 
 ### 数据共享
 
@@ -41,7 +41,7 @@ AI 输入历史是一款仅在浏览器本地工作的扩展，用于保存用�
 
 ### 联系方式
 
-发布前请将此处替换为开发者支持邮箱：`support@wangshuai.app`
+开发者支持邮箱：`support@wangshuai.app`
 
 ---
 
@@ -63,7 +63,7 @@ On enabled sites, the extension may handle:
 
 This data is used only to provide the clearly disclosed local input-history feature. History, drafts, and settings are stored in `chrome.storage.local`. The extension has no developer-operated server and does not upload prompts, history, or settings to the developer. Data is not used for advertising, profiling, analytics, or sale.
 
-The extension may request the favicon from the site the user is currently visiting. This request is used only to display that site's icon and is not sent to the developer or another third party.
+The extension may request a same-origin favicon for display only. Requests omit cookies and referrer information, do not follow redirects, and never fetch icons from other origins.
 
 ### Data sharing
 
@@ -86,4 +86,4 @@ The use of information received by this extension adheres to the Chrome Web Stor
 
 ### Contact
 
-Replace this placeholder with the publisher support email before publishing: `support@wangshuai.app`
+Publisher support email: `support@wangshuai.app`

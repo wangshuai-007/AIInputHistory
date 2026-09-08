@@ -9,8 +9,8 @@
         if (!dataUrl) continue;
         await store.saveSiteIcon(site, dataUrl);
         return dataUrl;
-      } catch {
-        // Some sites host favicons on a CDN without CORS. Try the next same-page candidate.
+      } catch (error) {
+        console.debug("[AI Input History] 网站图标不可用，保留本地图标", error.name);
       }
     }
     return null;
@@ -25,8 +25,11 @@
   async function readIcon(source) {
     if (source.startsWith("data:image/") && source.length <= 180_000) return source;
     const url = new URL(source, location.href);
-    if (!["http:", "https:"].includes(url.protocol)) return null;
-    const response = await fetch(url.href, { credentials: "include", cache: "force-cache" });
+    if (!["http:", "https:"].includes(url.protocol) || url.origin !== location.origin) return null;
+    const response = await fetch(url.href, {
+      credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", cache: "force-cache",
+      signal: AbortSignal.timeout(3000)
+    });
     if (!response.ok) return null;
     const blob = await response.blob();
     if (blob.size > 130_000 || (blob.type && !blob.type.startsWith("image/"))) return null;

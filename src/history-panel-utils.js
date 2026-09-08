@@ -53,5 +53,34 @@
     return `${day} ${time}`;
   }
 
-  namespace.historyPanelUtils = { badgeMarkup, clampPosition, composerRect, enterIcon, escapeHtml, formatSavedTime, formatTime };
+  /** Renders history only when needed, retaining scroll position and focused entry. */
+  function renderEntries(panel) {
+    const markup = panel.items.map((entry, index) => entryMarkup(entry, index, panel)).join("");
+    if (panel.listMarkup === markup) return;
+    const active = panel.shadow.activeElement;
+    const focusedId = active?.closest(".entry-row")?.dataset.entryId;
+    const focusedClass = active?.classList.contains("pin-button") ? ".pin-button" : ".item";
+    const scrollTop = panel.list.scrollTop;
+    panel.list.innerHTML = markup;
+    panel.listMarkup = markup;
+    panel.list.scrollTop = scrollTop;
+    if (focusedId) {
+      const row = [...panel.list.querySelectorAll(".entry-row")].find((item) => item.dataset.entryId === focusedId);
+      (row?.querySelector(focusedClass) || panel.search).focus({ preventScroll: true });
+    }
+  }
+
+  function entryMarkup(entry, index, panel) {
+    const pinned = entry.pinned ? `<span class="pin-badge">${escapeHtml(namespace.i18n.t("panel.pinned"))}</span>` : "";
+    const pinLabel = escapeHtml(namespace.i18n.t(entry.pinned ? "panel.unpin" : "panel.pin"));
+    const selected = index === panel.selectedIndex;
+    return `<div class="entry-row ${entry.pinned ? "pinned" : ""}" role="listitem" data-entry-id="${escapeHtml(entry.id)}">
+      <button class="item ${selected ? "selected" : ""}" type="button" aria-current="${selected}" data-index="${index}">
+      <span class="item-top">${pinned}${badgeMarkup(entry.kind)}<span class="time">${formatTime(entry.createdAt)}</span><span class="site">${escapeHtml(entry.site || namespace.i18n.t("panel.local"))}</span></span>
+      <span class="content">${escapeHtml(entry.text)}</span></button>
+      <button class="icon-button pin-button" type="button" data-index="${index}" aria-pressed="${Boolean(entry.pinned)}" title="${pinLabel}" aria-label="${pinLabel}" ${panel.pinning.has(entry.id) ? "disabled" : ""}>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m16 3 5 5-3 1-4 4v4l-3-3-6 6 6-6-3-3h4l4-4 1-3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button></div>`;
+  }
+
+  namespace.historyPanelUtils = { badgeMarkup, clampPosition, composerRect, enterIcon, escapeHtml, formatSavedTime, formatTime, renderEntries };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

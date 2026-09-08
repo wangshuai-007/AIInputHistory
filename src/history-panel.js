@@ -1,7 +1,7 @@
 (function initializeHistoryPanel(namespace) {
   "use strict";
 
-  const { badgeMarkup, clampPosition, composerRect, enterIcon, escapeHtml, formatSavedTime, formatTime } = namespace.historyPanelUtils;
+  const { clampPosition, composerRect, enterIcon, escapeHtml, formatSavedTime, renderEntries } = namespace.historyPanelUtils;
 
   const STYLE = namespace.historyPanelStyle;
 
@@ -11,6 +11,9 @@
       this.onSelect = onSelect;
       this.onClear = onClear;
       this.items = [];
+      this.refreshRevision = 0;
+      this.openRevision = 0;
+      this.pinning = new Set();
       this.selectedIndex = 0;
       this.sendOnly = false;
       this.pinnedOnly = false;
@@ -38,7 +41,7 @@
       this.launcherTooltip = this.shadow.querySelector(".launcher-tooltip");
       this.clearConfirmation = new namespace.ClearConfirmation(this.shadow, () => this.clearHistory());
       this.bindEvents();
-      this.positionsReady = this.loadPositions();
+      this.positionsReady = this.loadPositions().catch((error) => this.reportError(error));
       this.loadLastSavedTime().catch((error) => console.warn("[AI 输入历史] 读取上次自动保存时间失败", error));
     }
 
@@ -57,7 +60,7 @@
         <input class="search" type="search" data-i18n-placeholder="panel.searchPlaceholder" data-i18n-aria-label="panel.searchAria" placeholder="搜索本地历史…" aria-label="搜索输入历史">
         <div class="filter-row"><div class="site-filter-host"></div>
         <div class="filters"><button class="filter active" data-filter="all" type="button" data-i18n="panel.all">全部</button><button class="filter" data-filter="send" type="button">${enterIcon()}<span data-i18n="panel.send">发送</span></button><button class="filter" data-filter="pinned" type="button" data-i18n="panel.pinned">固定</button></div></div></header><p class="pin-error hidden" role="alert"></p>
-        <div class="list" role="listbox"></div><footer class="foot"><span data-i18n="panel.footer">↑ ↓ 选择 · Enter 插入</span><span class="count"></span></footer>
+        <div class="list" role="list" data-i18n-aria-label="panel.aria"></div><footer class="foot"><span data-i18n="panel.footer">↑ ↓ 选择 · Enter 插入</span><span class="count"></span></footer>
       </section>
       <dialog class="clear-dialog" aria-labelledby="aih-clear-title" aria-describedby="aih-clear-copy">
         <div class="confirm-body"><div class="confirm-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5m0 3.5v.5M10.3 4.8 3.7 17a2 2 0 0 0 1.8 3h13a2 2 0 0 0 1.8-3L13.7 4.8a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -81,11 +84,11 @@
         onEnd: (position) => this.persistPosition("panel", position)
       });
       this.launcher.addEventListener("click", () => {
-        if (!this.launcherDrag.shouldSuppressClick()) this.open();
+        if (!this.launcherDrag.shouldSuppressClick()) this.open().catch((error) => this.reportError(error));
       });
       this.launcher.addEventListener("contextmenu", (event) => {
         event.preventDefault();
-        this.disableLauncher();
+        this.disableLauncher().catch((error) => this.reportError(error));
       });
       this.launcher.addEventListener("pointerenter", () => this.positionLauncherTooltip());
       this.launcher.addEventListener("focus", () => this.positionLauncherTooltip());
@@ -95,7 +98,10 @@
       this.shadow.querySelectorAll(".filter").forEach((button) => button.addEventListener("click", () => {
         this.sendOnly = button.dataset.filter === "send";
         this.pinnedOnly = button.dataset.filter === "pinned";
-        this.shadow.querySelectorAll(".filter").forEach((item) => item.classList.toggle("active", item === button));
+        this.shadow.querySelectorAll(".filter").forEach((item) => {
+          item.classList.toggle("active", item === button);
+          item.setAttribute("aria-pressed", String(item === button));
+        });
         this.refresh();
       }));
       this.list.addEventListener("click", (event) => {
@@ -174,22 +180,26 @@
     }
 
     async disableLauncher() {
+      await this.store.patchSettings({ launcherEnabled: false });
       this.setLauncherEnabled(false);
-      const settings = await this.store.getSettings();
-      await this.store.saveSettings({ ...settings, launcherEnabled: false });
     }
 
     async open() {
       if (!this.target) return;
+      const revision = ++this.openRevision;
       await this.positionsReady;
+      if (revision !== this.openRevision) return;
       this.panel.classList.remove("hidden");
       await this.loadSites();
       await this.refresh();
+      if (revision !== this.openRevision || !this.isOpen()) return;
       this.reposition();
       this.search.focus();
     }
 
     close() {
+      this.openRevision += 1;
+      this.refreshRevision += 1;
       this.closeClearConfirmation();
       this.siteFilter.setExpanded(false);
       this.panel.classList.add("hidden");
@@ -222,31 +232,52 @@
     }
 
     async refresh() {
-      this.items = await this.store.getHistory(this.search.value, this.sendOnly, this.selectedSite, this.pinnedOnly);
-      this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.items.length - 1));
-      this.render();
+      const revision = ++this.refreshRevision;
+      const filterKey = JSON.stringify([this.search.value, this.sendOnly, this.selectedSite, this.pinnedOnly]);
+      try {
+        const items = await this.store.getHistory(this.search.value, this.sendOnly, this.selectedSite, this.pinnedOnly);
+        if (revision !== this.refreshRevision) return;
+        const selectedId = this.items[this.selectedIndex]?.id;
+        const index = filterKey === this.filterKey ? items.findIndex((entry) => entry.id === selectedId) : 0;
+        this.items = items;
+        this.selectedIndex = Math.max(0, index);
+        this.filterKey = filterKey;
+        this.shadow.querySelector(".pin-error").classList.add("hidden");
+        this.render();
+      } catch (error) {
+        if (revision === this.refreshRevision) this.reportError(error);
+      }
+    }
+
+    /** Shows storage failures rather than silently losing the requested action. */
+    reportError(error) {
+      const box = this.shadow.querySelector(".pin-error");
+      box.textContent = namespace.i18n.t("panel.operationFailed");
+      box.classList.remove("hidden");
+      console.warn("[AI Input History]", error);
     }
 
     render() {
       this.shadow.querySelector(".count").textContent = namespace.i18n.t("panel.count", { count: this.items.length });
       if (!this.items.length) {
+        this.listMarkup = "";
         this.list.innerHTML = `<div class="empty">${escapeHtml(namespace.i18n.t("panel.empty")).replace("\n", "<br>")}</div>`;
         return;
       }
-      this.list.innerHTML = this.items.map((entry, index) => `<div class="entry-row ${entry.pinned ? "pinned" : ""}"><button class="item ${index === this.selectedIndex ? "selected" : ""}" type="button" role="option" aria-selected="${index === this.selectedIndex}" data-index="${index}">
-        <span class="item-top">${entry.pinned ? `<span class="pin-badge">${escapeHtml(namespace.i18n.t("panel.pinned"))}</span>` : ""}${badgeMarkup(entry.kind)}<span class="time">${formatTime(entry.createdAt)}</span><span class="site">${escapeHtml(entry.site || namespace.i18n.t("panel.local"))}</span></span>
-        <span class="content">${escapeHtml(entry.text)}</span></button><button class="icon-button pin-button" type="button" data-index="${index}" aria-pressed="${Boolean(entry.pinned)}" title="${escapeHtml(namespace.i18n.t(entry.pinned ? "panel.unpin" : "panel.pin"))}" aria-label="${escapeHtml(namespace.i18n.t(entry.pinned ? "panel.unpin" : "panel.pin"))}"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m16 3 5 5-3 1-4 4v4l-3-3-6 6 6-6-3-3h4l4-4 1-3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button></div>`).join("");
+      renderEntries(this);
     }
 
     /** Changes pin state without inserting text or closing the history panel. */
     async togglePin(index, button) {
       const entry = this.items[index];
-      if (!entry || button.disabled) return;
+      if (!entry || button.disabled || this.pinning.has(entry.id)) return;
       const errorBox = this.shadow.querySelector(".pin-error");
       errorBox.classList.add("hidden");
       button.disabled = true;
+      this.pinning.add(entry.id);
       try {
         await this.store.setPinned(entry, !entry.pinned);
+        this.pinning.delete(entry.id);
         await this.refresh();
         const nextButton = this.list.querySelector(`.pin-button[data-index="${Math.min(index, this.items.length - 1)}"]`);
         (nextButton || this.search).focus();
@@ -255,14 +286,21 @@
         errorBox.classList.remove("hidden");
         console.warn("[AI Input History] Pin", error);
       } finally {
+        this.pinning.delete(entry.id);
         button.disabled = false;
+        this.render();
       }
     }
 
     moveSelection(delta) {
       if (!this.items.length) return;
       this.selectedIndex = (this.selectedIndex + delta + this.items.length) % this.items.length;
-      this.render();
+      this.listMarkup = "";
+      this.list.querySelectorAll(".item").forEach((item, index) => {
+        item.classList.toggle("selected", index === this.selectedIndex);
+        item.setAttribute("aria-current", String(index === this.selectedIndex));
+      });
+      if (this.shadow.activeElement?.classList?.contains("item")) this.list.querySelector(".selected")?.focus({ preventScroll: true });
       this.list.querySelector(".selected")?.scrollIntoView({ block: "nearest" });
     }
 
@@ -283,6 +321,7 @@
       namespace.SiteProfiles.setSiteIcons(await this.store.getSiteIcons());
       const sites = await this.store.getSites();
       this.siteFilter.setSites(sites);
+      this.selectedSite = this.siteFilter.selectedSite;
     }
 
     async syncFromStorage() {

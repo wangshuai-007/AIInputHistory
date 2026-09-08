@@ -19,9 +19,9 @@ vm.runInNewContext(source, context);
 const { didComposerClear } = context.globalThis.AIInputHistory.sendDetection;
 const { SendDetector } = context.globalThis.AIInputHistory;
 
-test("输入框清空或被移除时判定为实际发送", () => {
+test("只有仍在页面的输入框清空才判定为实际发送", () => {
   assert.equal(didComposerClear("待发送内容", "", true), true);
-  assert.equal(didComposerClear("待发送内容", "待发送内容", false), true);
+  assert.equal(didComposerClear("待发送内容", "待发送内容", false), false);
 });
 
 test("Enter 产生换行时不判定为发送", () => {
@@ -33,11 +33,11 @@ test("空内容不会被判定为发送", () => {
   assert.equal(didComposerClear("   ", "", true), false);
 });
 
-test("内置 AI 拦截发送快捷键后记录，不等待页面响应", async () => {
+test("内置 AI 拦截发送快捷键后短暂确认没有换行，仍保存失败发送尝试", async () => {
   let emission = null;
   const detector = new SendDetector({ getText: () => "页面失败也要保存" }, (text, context, source) => { emission = { text, context, source }; });
   detector.watchEnter({ key: "Enter", shiftKey: false, isComposing: false, defaultPrevented: true }, { isConnected: true }, { fieldKey: "chatgpt", site: "chatgpt.com" });
-  await new Promise((resolve) => setTimeout(resolve, 60));
+  await new Promise((resolve) => setTimeout(resolve, 950));
   assert.equal(emission.text, "页面失败也要保存");
   assert.equal(emission.source, "keyboard-attempt");
 });

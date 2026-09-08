@@ -10,11 +10,6 @@
   let liveSettings = settings;
   if (!namespace.SiteProfiles.isAllowedSite(location.hostname, settings.customDomains)) return;
   namespace.SiteProfiles.setSiteIcons(await store.getSiteIcons());
-  namespace.captureSiteIcon(store, location.hostname).then(async (dataUrl) => {
-    if (!dataUrl) return;
-    namespace.SiteProfiles.setSiteIcons(await store.getSiteIcons());
-    if (panel.isOpen()) panel.loadSites();
-  });
   const adapter = namespace.InputAdapter;
   const historyNavigator = new namespace.HistoryNavigator(store, adapter);
   let activeInput = null;
@@ -23,12 +18,19 @@
   let snapshotTimer = null;
   let lastSnapshotText = "";
   let storageSyncTimer = null;
+  let snapshotInFlight = false;
+  let recordQueue = Promise.resolve();
 
   const panel = new namespace.HistoryPanel(
     store,
     (text) => { if (activeInput) adapter.setText(activeInput, text); },
     () => historyNavigator.reset()
   );
+  namespace.captureSiteIcon(store, location.hostname).then(async (dataUrl) => {
+    if (!dataUrl) return;
+    namespace.SiteProfiles.setSiteIcons(await store.getSiteIcons());
+    if (panel.isOpen()) await panel.loadSites();
+  }).catch((error) => console.warn("[AI 输入历史] 读取网站图标失败", error));
   panel.setLauncherEnabled(settings.launcherEnabled);
   chrome.storage.onChanged?.addListener((changes, areaName) => {
     if (areaName !== "local") return;
@@ -36,6 +38,7 @@
     if (nextSettings) {
       liveSettings = namespace.historyModel.sanitizeSettings(nextSettings);
       panel.setLauncherEnabled(nextSettings.launcherEnabled !== false);
+      if (liveSettings.launcherEnabled) discoverComposer();
       if (changes[namespace.STORAGE_KEYS.settings]?.oldValue?.language !== liveSettings.language) panel.setLanguage(liveSettings.language);
       if (changes[namespace.STORAGE_KEYS.settings]?.oldValue?.snapshotSeconds !== nextSettings.snapshotSeconds) scheduleSnapshots();
     }
@@ -60,6 +63,12 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") recordSnapshot();
   });
+  discoverComposer();
+
+  function discoverComposer() {
+    const candidate = adapter.findComposer(document, panel.host);
+    if (candidate) activate(candidate);
+  }
 
   function handleFocus(event) {
     if (event.composedPath().includes(panel.host)) return;
@@ -69,20 +78,28 @@
   }
 
   function activate(element) {
-    if (activeInput !== element) historyNavigator.reset();
-    const sessionId = activeInput === element && activeContext?.sessionId ? activeContext.sessionId : makeSessionId();
+    const fieldKey = adapter.fieldKey(element);
+    const changed = activeInput !== element || activeContext?.fieldKey !== fieldKey;
+    if (changed) {
+      clearTimeout(draftTimer);
+      saveDraft();
+      historyNavigator.reset();
+      lastSnapshotText = "";
+    }
     activeInput = element;
-    activeContext = {
-      fieldKey: adapter.fieldKey(element),
+    if (changed) activeContext = {
+      fieldKey,
       site: location.hostname,
       title: document.title.slice(0, 120),
-      sessionId
+      sessionId: makeSessionId()
     };
     panel.setTarget(element);
-    scheduleSnapshots();
+    if (changed || !snapshotTimer) scheduleSnapshots();
   }
 
   function handleInput(event) {
+    if (event.composedPath().includes(panel.host)) return;
+    if (!activeInput?.isConnected) handleFocus(event);
     if (adapter.resolveEventEditable(event) !== activeInput) return;
     if (historyNavigator.isApplying()) return;
     if (!adapter.getText(activeInput).trim()) lastSnapshotText = "";
@@ -91,43 +108,56 @@
     draftTimer = setTimeout(saveDraft, 500);
   }
 
-  async function saveDraft() {
+  function saveDraft() {
     if (!activeInput || !activeContext) return;
-    try {
-      await store.saveDraft(activeContext.fieldKey, adapter.getText(activeInput), activeContext);
-    } catch (error) {
-      console.warn("[AI 输入历史] 保存草稿失败", error);
-    }
+    const context = activeContext;
+    const text = adapter.getText(activeInput);
+    return queueRecord(() => store.saveDraft(context.fieldKey, text, context));
   }
 
   async function recordSnapshot() {
-    if (!activeInput || !activeContext) return;
+    if (!activeInput?.isConnected || !activeContext || snapshotInFlight) return;
+    const context = activeContext;
     const text = adapter.getText(activeInput);
     if (!text.trim() || text === lastSnapshotText) return;
-    try {
-      const entry = await store.addEntry(text, "snapshot", activeContext);
-      await store.saveDraft(activeContext.fieldKey, text, activeContext);
-      lastSnapshotText = text;
-      panel.showSavedFeedback(entry?.createdAt);
-    } catch (error) {
-      console.warn("[AI 输入历史] 记录快照失败", error);
-    }
+    snapshotInFlight = true;
+    return queueRecord(async () => {
+      try {
+        const entry = await store.addEntry(text, "snapshot", context);
+        await store.saveDraft(context.fieldKey, text, context);
+        if (activeContext === context) lastSnapshotText = text;
+        panel.showSavedFeedback(entry?.createdAt);
+      } finally {
+        snapshotInFlight = false;
+      }
+    });
   }
 
   async function recordSend(text, context) {
     if (!text.trim()) return;
     clearTimeout(draftTimer);
     lastSnapshotText = text;
-    try {
-      await store.addEntry(text, "send", context);
-      await store.saveDraft(context.fieldKey, "", context);
+    if (activeContext === context) {
       historyNavigator.reset();
-      if (activeContext === context) activeContext = { ...context, sessionId: makeSessionId() };
-      if (panel.isOpen()) await panel.refresh();
-    } catch (error) {
-      lastSnapshotText = "";
-      console.warn("[AI 输入历史] 记录发送内容失败", error);
+      activeContext = { ...context, sessionId: makeSessionId() };
     }
+    return queueRecord(async () => {
+      try {
+        await store.addEntry(text, "send", context);
+        await store.saveDraft(context.fieldKey, "", context);
+        if (panel.isOpen()) await panel.refresh();
+      } catch (error) {
+        lastSnapshotText = "";
+        throw error;
+      }
+    });
+  }
+
+  function queueRecord(operation) {
+    recordQueue = recordQueue.then(operation).catch((error) => {
+      console.warn("[AI 输入历史] 保存输入历史失败", error);
+    });
+    return recordQueue;
   }
 
   function handleSubmit(event) {
@@ -140,31 +170,7 @@
 
   async function handleKeydown(event) {
     if (event.isComposing) return;
-    if (panel.isOpen()) {
-      if (event.key === "Escape" && panel.isClearConfirmationOpen()) {
-        event.preventDefault();
-        panel.closeClearConfirmation();
-        return;
-      }
-      if (event.composedPath().some((node) => node?.classList?.contains("pin-button"))) return;
-        const siteFilterEvent = panel.isSiteFilterEvent(event);
-      if (!siteFilterEvent && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
-        event.preventDefault();
-        panel.moveSelection(event.key === "ArrowUp" ? -1 : 1);
-        return;
-      }
-      if (!siteFilterEvent && event.key === "Enter" && adapter.resolveEventEditable(event) !== activeInput) {
-        event.preventDefault();
-        panel.choose();
-        return;
-      }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        panel.close();
-        activeInput?.focus();
-        return;
-      }
-    }
+    if (panel.isOpen() && handlePanelKeydown(event)) return;
 
     if (!activeInput || adapter.resolveEventEditable(event) !== activeInput) return;
     if (namespace.historyModel.matchesShortcut(event, liveSettings.shortcut)) {
@@ -184,10 +190,39 @@
     }
   }
 
-  async function scheduleSnapshots() {
+  function handlePanelKeydown(event) {
+    if (panel.isClearConfirmationOpen()) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        panel.closeClearConfirmation();
+      }
+      return true;
+    }
+    if (panel.isSiteFilterEvent(event)) return true;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      panel.close();
+      activeInput?.focus();
+      return true;
+    }
+    if (!event.composedPath().includes(panel.host)) return false;
+    const target = panel.shadow.activeElement || event.target;
+    const isSearch = target === panel.search;
+    const isItem = target?.classList?.contains("item");
+    if (!isSearch && !isItem) return true;
+    if (!event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && ["ArrowUp", "ArrowDown"].includes(event.key)) {
+      event.preventDefault();
+      panel.moveSelection(event.key === "ArrowUp" ? -1 : 1);
+    } else if (event.key === "Enter" && isSearch) {
+      event.preventDefault();
+      panel.choose();
+    }
+    return true;
+  }
+
+  function scheduleSnapshots() {
     clearInterval(snapshotTimer);
-    const settings = await store.getSettings();
-    snapshotTimer = setInterval(recordSnapshot, settings.snapshotSeconds * 1_000);
+    snapshotTimer = setInterval(recordSnapshot, liveSettings.snapshotSeconds * 1_000);
   }
 
   function makeSessionId() {

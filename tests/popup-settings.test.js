@@ -29,7 +29,7 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
   const elements = Object.fromEntries([
     "#historyLimit", "#sendLimit", "#snapshotSeconds", "#launcherEnabled", "#domainInput",
     "#domainList", "#domainForm", "#clear", "#status", "#totalCount", "#sendCount", "#draftCount",
-    "#shortcutCapture", "#shortcutDisable", "#languageSelect", "#clearDialog", "#clearDialogError", "#cancelClear", "#confirmClear"
+    "#shortcutCapture", "#shortcutDisable", "#languageSelect", "#clearDialog", "#clearDialogError", "#cancelClear", "#confirmClear", "#extensionVersion"
   ].map((selector) => [selector, element()]));
   const saves = [];
   let clearCount = 0;
@@ -38,17 +38,19 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
       return { historyLimit: 100, sendLimit: 10, snapshotSeconds: 60, shortcut: "Ctrl+R", language: "zh-CN", launcherEnabled: true, customDomains: [] };
     }
     async getState() { return { entries: [], drafts: {} }; }
-    async saveSettings(settings) { saves.push(settings); return { ...settings, snapshotSeconds: Number(settings.snapshotSeconds) }; }
+    async patchSettings(patch) { saves.push(patch); return { ...await this.getSettings(), ...patch, snapshotSeconds: Number(patch.snapshotSeconds || 60) }; }
     async clearHistory() { clearCount += 1; }
   }
   const context = {
+    chrome: { runtime: { getManifest: () => ({ version: "1.26.0" }) }, storage: { onChanged: { addListener(listener) { context.storageListener = listener; } } } },
     AIInputHistory: { HistoryStore, i18n: (() => {
       let language = "zh-CN";
       return { setLanguage(value) { language = value === "en" ? "en" : "zh-CN"; }, language: () => language, localize() {}, t: (key) => key };
     })(), historyModel: {
       shortcutFromEvent(event) { return event.ctrlKey && event.code === "KeyK" ? "Ctrl+K" : ""; },
-      normalizeDomain() { return ""; }
-    } },
+      normalizeDomain() { return ""; },
+      sanitizeSettings(value) { return value; }
+    }, STORAGE_KEYS: { settings: "settings", state: "state" } },
     document: {
       documentElement: { lang: "" },
       querySelector: (selector) => elements[selector],
@@ -80,6 +82,10 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(saves.at(-1).language, "en");
   assert.equal(context.document.documentElement.lang, "en");
+  assert.equal(elements["#extensionVersion"].textContent, "v1.26.0");
+  context.storageListener({ settings: { newValue: { ...await new HistoryStore().getSettings(), launcherEnabled: false } } }, "local");
+  assert.equal(elements["#launcherEnabled"].checked, false);
+  assert.deepEqual(Object.keys(saves[0]), ["snapshotSeconds"]);
 
   elements["#clear"].listeners.click();
   assert.equal(elements["#clearDialog"].open, true);

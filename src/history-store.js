@@ -118,11 +118,15 @@
   /** Hides legacy snapshots that were superseded by a later send from the same composition. */
   function compactSentSnapshots(entries) {
     const sends = entries.filter((entry) => entry?.kind === "send");
+    const sentSessions = new Set(sends.map((entry) => entry.sessionId).filter(Boolean));
+    const sentFields = new Map();
+    for (const entry of sends) {
+      sentFields.set(entry.fieldKey, Math.max(sentFields.get(entry.fieldKey) || 0, Number(entry.createdAt) || 0));
+    }
     return entries.filter((entry) => {
       if (entry?.pinned || entry?.kind !== "snapshot") return true;
-      if (entry.sessionId) return !sends.some((send) => send.sessionId && send.sessionId === entry.sessionId);
-      return !sends.some((send) => send.fieldKey === entry.fieldKey
-        && (Number(send.createdAt) || 0) >= (Number(entry.createdAt) || 0));
+      if (entry.sessionId) return !sentSessions.has(entry.sessionId);
+      return !sentFields.has(entry.fieldKey) || sentFields.get(entry.fieldKey) < (Number(entry.createdAt) || 0);
     });
   }
 
@@ -199,12 +203,17 @@
     }
 
     async saveSettings(nextSettings) {
-      const settings = sanitizeSettings(nextSettings);
+      return this.patchSettings(sanitizeSettings(nextSettings));
+    }
+
+    /** Merges only changed settings under the shared write lock to preserve other windows' changes. */
+    async patchSettings(patch) {
+      let settings;
       await withStorageLock(async () => {
-        await storageSet({ [SETTINGS_KEY]: settings });
+        settings = sanitizeSettings({ ...await this.getSettings(), ...patch });
         const state = await this.getState();
         state.entries = pruneEntries(state.entries, settings);
-        await storageSet({ [STORAGE_KEY]: state });
+        await storageSet({ [SETTINGS_KEY]: settings, [STORAGE_KEY]: state });
       });
       return settings;
     }
@@ -214,8 +223,8 @@
       const stored = result[STORAGE_KEY];
       if (!stored || !Array.isArray(stored.entries)) return initialState();
       return {
-        entries: compactSentSnapshots(stored.entries.map(normalizeEntry)),
-        drafts: stored.drafts && typeof stored.drafts === "object" ? stored.drafts : {},
+        entries: compactSentSnapshots(stored.entries.filter((entry) => entry && typeof entry.text === "string").map(normalizeEntry)),
+        drafts: Object.fromEntries(Object.entries(stored.drafts || {}).filter(([, draft]) => draft && typeof draft.text === "string")),
         positions: stored.positions && typeof stored.positions === "object" ? stored.positions : {},
         siteIcons: stored.siteIcons && typeof stored.siteIcons === "object" ? stored.siteIcons : {}
       };
@@ -227,7 +236,8 @@
       return withStorageLock(async () => {
         const [state, settings] = await Promise.all([this.getState(), this.getSettings()]);
         const latest = state.entries
-          .filter((entry) => entry.kind === normalizedKind && entry.fieldKey === context.fieldKey)
+          .filter((entry) => entry.kind === normalizedKind && entry.fieldKey === context.fieldKey
+            && (entry.sessionId || "") === (context.sessionId || ""))
           .sort((left, right) => right.createdAt - left.createdAt)[0];
         if (normalizedKind === "snapshot" && latest?.text === text) return latest;
 
@@ -245,8 +255,10 @@
       await withStorageLock(async () => {
         const state = await this.getState();
         const drafts = { ...state.drafts };
-        if (String(text || "").trim()) drafts[fieldKey] = { text, updatedAt: Date.now(), site: context.site, title: context.title };
-        else delete drafts[fieldKey];
+        const key = context.sessionId ? `${fieldKey}:session:${context.sessionId}` : fieldKey;
+        if (String(text || "").trim()) {
+          drafts[key] = { text, updatedAt: Date.now(), site: context.site, title: context.title, fieldKey, sessionId: context.sessionId || "" };
+        } else delete drafts[key];
         state.drafts = Object.fromEntries(Object.entries(drafts)
           .sort(([, left], [, right]) => right.updatedAt - left.updatedAt).slice(0, 50));
         await storageSet({ [STORAGE_KEY]: state });
@@ -255,9 +267,9 @@
 
     async getHistory(query, sendOnly, site = "*", pinnedOnly = false) {
       const state = await this.getState();
-      const drafts = Object.entries(state.drafts).map(([fieldKey, draft]) => ({
-        id: `draft:${fieldKey}`, text: draft.text, kind: "draft", createdAt: draft.updatedAt,
-        site: draft.site, title: draft.title, fieldKey
+      const drafts = Object.entries(state.drafts).map(([key, draft]) => ({
+        id: `draft:${key}`, text: draft.text, kind: "draft", createdAt: draft.updatedAt,
+        site: draft.site, title: draft.title, fieldKey: draft.fieldKey || key, sessionId: draft.sessionId || ""
       }));
       return filterEntries([...state.entries, ...drafts], query, sendOnly, site, pinnedOnly);
     }
@@ -268,8 +280,12 @@
         const state = await this.getState();
         let entry = state.entries.find((item) => item.id === displayedEntry.id);
         if (!entry && pinned && displayedEntry.kind === "draft") {
-          entry = { ...displayedEntry, id: makeId(), kind: "snapshot" };
-          state.entries.push(entry);
+          entry = state.entries.find((item) => item.sourceDraftId === displayedEntry.id
+            && item.createdAt === displayedEntry.createdAt && item.text === displayedEntry.text);
+          if (!entry) {
+            entry = { ...displayedEntry, id: makeId(), kind: "snapshot", sourceDraftId: displayedEntry.id };
+            state.entries.push(entry);
+          }
         }
         if (!entry) throw new Error("记录已不存在 / Entry no longer exists");
         entry.pinned = Boolean(pinned);
