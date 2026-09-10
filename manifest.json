@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
-  "version": "1.26.0",
+  "version": "1.28.0",
   "description": "__MSG_extensionDescription__",
   "default_locale": "zh_CN",
   "icons": {
@@ -11,6 +11,8 @@
     "128": "assets/icons/icon-128.png"
   },
   "permissions": ["storage"],
+  "optional_permissions": ["notifications"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": {
     "service_worker": "background.js"
   },
@@ -34,6 +36,8 @@
         "src/history-navigator.js",
         "src/draggable.js",
         "src/send-detector.js",
+        "src/request-timing.js",
+        "src/request-timing-view.js",
         "src/site-filter.js",
         "src/theme-observer.js",
         "src/history-panel-utils.js",

@@ -59,6 +59,7 @@ async function setup() {
   };
   context.globalThis.AIInputHistory = {
     HistoryStore: Store, HistoryPanel: Panel,
+    RequestTiming: class { setEnabled() {} capture() { return null; } start() { return null; } attach() {} finish() {} },
     i18n: { setLanguage() {} },
     SiteProfiles: { isAllowedSite: () => true, setSiteIcons() {} },
     captureSiteIcon: async () => null,
@@ -176,4 +177,16 @@ test("搜索框仍支持上下选择及 Enter 插入", async () => {
   assert.equal(event.defaultPrevented, true);
   assert.equal(h.panel.moves, 1);
   assert.equal(h.panel.selected, 1);
+});
+
+test("浏览器验收页加载请求计时依赖，且顺序早于面板和内容脚本", () => {
+  for (const name of ["browser-fixture.html", "chatgpt-error-fixture.html"]) {
+    const html = fs.readFileSync(path.join(__dirname, name), "utf8");
+    const timing = html.indexOf("../src/request-timing.js");
+    const timingView = html.indexOf("../src/request-timing-view.js");
+    const panel = html.indexOf("../src/history-panel.js");
+    const content = html.indexOf("../src/content.js");
+    assert.ok(timing >= 0 && timingView > timing, name);
+    assert.ok(panel > timingView && content > panel, name);
+  }
 });

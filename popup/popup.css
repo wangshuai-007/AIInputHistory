@@ -48,6 +48,22 @@ input:focus-visible,button:focus-visible { outline:2px solid var(--accent); outl
 .key-plus { color:var(--muted); font-size:10px; }
 .shortcut-placeholder { color:var(--muted); font-size:10px; }
 .shortcut-help { line-height:1.45; }
+.notifications { border-top:1px solid var(--line); margin-top:14px; }
+.notify-row select,.notification-config input,.notification-config select,.notification-config textarea { border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--text); font:inherit; }
+.notify-row select { width:138px; height:34px; padding:0 8px; }
+.notification-config>div { display:none; padding:9px 0 2px; }
+.notification-config>div.active { display:block; }
+.notification-config>div>p { padding:5px 0 8px; line-height:1.5; }
+.notification-config label { min-height:46px; gap:8px; font-size:11px; }
+.notification-config label>span { flex:0 0 86px; }
+.notification-config input,.notification-config select { min-width:0; width:190px; height:32px; padding:0 8px; }
+.notification-config .notify-multiline { display:block; padding:8px 0; }
+.notification-config .notify-multiline>span { display:block; margin-bottom:6px; }
+.notification-config textarea { width:100%; padding:7px 8px; resize:vertical; font-family:Consolas,monospace; font-size:10px; line-height:1.4; }
+.notify-template-help { display:block; padding:6px 0; line-height:1.5; overflow-wrap:anywhere; }
+.notify-actions { display:flex; justify-content:flex-end; padding-top:9px; }
+.notify-actions button { height:32px; border:1px solid var(--accent); border-radius:9px; padding:0 11px; background:transparent; color:var(--accent); cursor:pointer; font-size:10px; }
+.notify-actions button:disabled { opacity:.5; cursor:wait; }
 #status { min-height:29px; padding-top:10px; color:var(--accent); font-size:11px; }
 .domains { border-top:1px solid var(--line); margin-top:14px; } .domains>p { margin:0 0 10px; line-height:1.5; }
 #domainForm { display:flex; gap:7px; }

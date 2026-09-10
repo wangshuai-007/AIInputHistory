@@ -39,6 +39,7 @@
       this.list = this.shadow.querySelector(".list");
       this.savedStatus = this.shadow.querySelector(".saved-status");
       this.launcherTooltip = this.shadow.querySelector(".launcher-tooltip");
+      this.timingView = new namespace.RequestTimingView(this);
       this.clearConfirmation = new namespace.ClearConfirmation(this.shadow, () => this.clearHistory());
       this.bindEvents();
       this.positionsReady = this.loadPositions().catch((error) => this.reportError(error));
@@ -134,6 +135,7 @@
 
     showSavedFeedback(savedAt = Date.now()) {
       this.setLastSavedAt(savedAt);
+      if (this.timingView?.active) return;
       if (!this.launcherEnabled && !this.isOpen()) return;
       clearTimeout(this.savedFeedbackTimer);
       this.launcher.classList.remove("aih-saved");

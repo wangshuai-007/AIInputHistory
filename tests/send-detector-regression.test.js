@@ -53,7 +53,7 @@ test("输入框切换或页面移除不会虚构发送历史", () => {
 test("发送按钮右键和非主指针不会记录发送", () => {
   const h = setup();
   h.detector.handlePointerDown({ button: 2 }, h.input, h.field);
-  h.detector.handlePointerDown({ button: 0, isPrimary: false }, h.input, h.field);
+  h.detector.handlePointerDown({ type: "pointerdown", button: 0, isPrimary: false }, h.input, h.field);
   assert.equal(h.sent.length, 0);
 });
 

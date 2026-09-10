@@ -10,7 +10,7 @@ Save AI chat drafts and sent prompts locally, with search, filtering, and fast h
 
 ## Detailed description
 
-AI Input History helps recover prompts lost because of unsent drafts, page errors, or accidental actions. All input history stays in the current browser and is never uploaded to a developer-operated server.
+AI Input History helps recover prompts lost because of unsent drafts, page errors, or accidental actions. Input history stays in the current browser by default and is never uploaded to a developer-operated server. Data is sent externally only when you explicitly enable a completion notification service you configure.
 
 Key features:
 
@@ -21,9 +21,11 @@ Key features:
 - Built-in support for ChatGPT, Claude, Gemini, Grok, DeepSeek, Copilot, Perplexity, Kimi, Doubao, Qwen, GLM, and other popular AI sites;
 - Add other AI domains manually;
 - English and Chinese interfaces, dark mode, custom shortcuts, and a movable floating button;
+- Track ChatGPT send-to-completion duration and optionally notify when a reply completes;
+- Notifications support browser/system notifications, Bark, ServerChan, PushPlus, ntfy, Gotify, DingTalk, Feishu, WeCom robots, and custom HTTP requests;
 - Clear all local history with an explicit confirmation step.
 
-Privacy disclosure: On supported or user-added sites, the extension reads chat input text, the page title, and domain only to provide local input history. Data is never uploaded, shared, sold, or used for advertising or analytics.
+Privacy disclosure: The extension reads chat input text, page titles, and domains on supported or user-added sites to provide local history. History stays local by default. Only when you explicitly enable an external completion notification will the configured summary or template data be sent to the selected service. Data is not sent to the developer, sold, or used for advertising or analytics.
 
 ## Suggested category
 

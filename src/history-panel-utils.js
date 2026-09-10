@@ -53,6 +53,19 @@
     return `${day} ${time}`;
   }
 
+  /** Formats request completion metadata without inventing durations for unfinished observations. */
+  function timingMarkup(entry) {
+    if (entry.kind !== "send" || !entry.requestTiming) return "";
+    const timing = entry.requestTiming;
+    if (timing.status !== "completed" || !Number.isFinite(timing.durationMs) || !Number.isFinite(timing.completedAt)) {
+      const status = ["pending", "cancelled", "failed", "timeout"].includes(timing.status) ? timing.status : "pending";
+      return `<span class="reply-timing">${escapeHtml(namespace.i18n.t(`timing.${status}`))}</span>`;
+    }
+    const duration = namespace.i18n.t("timing.duration", { seconds: (timing.durationMs / 1000).toFixed(1) });
+    const time = new Intl.DateTimeFormat(namespace.i18n.locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(new Date(timing.completedAt));
+    return `<span class="reply-timing" title="${escapeHtml(formatSavedTime(timing.completedAt))}"><span>${escapeHtml(duration)}</span><span>${escapeHtml(namespace.i18n.t("timing.replyAt", { time }))}</span></span>`;
+  }
+
   /** Renders history only when needed, retaining scroll position and focused entry. */
   function renderEntries(panel) {
     const markup = panel.items.map((entry, index) => entryMarkup(entry, index, panel)).join("");
@@ -76,11 +89,11 @@
     const selected = index === panel.selectedIndex;
     return `<div class="entry-row ${entry.pinned ? "pinned" : ""}" role="listitem" data-entry-id="${escapeHtml(entry.id)}">
       <button class="item ${selected ? "selected" : ""}" type="button" aria-current="${selected}" data-index="${index}">
-      <span class="item-top">${pinned}${badgeMarkup(entry.kind)}<span class="time">${formatTime(entry.createdAt)}</span><span class="site">${escapeHtml(entry.site || namespace.i18n.t("panel.local"))}</span></span>
-      <span class="content">${escapeHtml(entry.text)}</span></button>
+      <span class="item-top">${pinned}${badgeMarkup(entry.kind)}<span class="time" title="${escapeHtml(formatSavedTime(entry.createdAt))}"><span class="time-short">${formatTime(entry.createdAt)}</span><span class="time-precise">${new Intl.DateTimeFormat(namespace.i18n.locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(new Date(entry.createdAt))}</span></span><span class="site">${escapeHtml(entry.site || namespace.i18n.t("panel.local"))}</span></span>
+      <span class="content">${escapeHtml(entry.text)}</span>${timingMarkup(entry)}</button>
       <button class="icon-button pin-button" type="button" data-index="${index}" aria-pressed="${Boolean(entry.pinned)}" title="${pinLabel}" aria-label="${pinLabel}" ${panel.pinning.has(entry.id) ? "disabled" : ""}>
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m16 3 5 5-3 1-4 4v4l-3-3-6 6 6-6-3-3h4l4-4 1-3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button></div>`;
   }
 
-  namespace.historyPanelUtils = { badgeMarkup, clampPosition, composerRect, enterIcon, escapeHtml, formatSavedTime, formatTime, renderEntries };
+  namespace.historyPanelUtils = { badgeMarkup, clampPosition, composerRect, enterIcon, escapeHtml, formatSavedTime, formatTime, renderEntries, timingMarkup };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

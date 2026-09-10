@@ -26,6 +26,12 @@
     (text) => { if (activeInput) adapter.setText(activeInput, text); },
     () => historyNavigator.reset()
   );
+  const requestTiming = new namespace.RequestTiming({
+    store,
+    onTick: (elapsed) => panel.timingView.update(liveSettings.trackRequestTime ? elapsed : null),
+    onComplete: notifyRequestCompleted
+  });
+  requestTiming.setEnabled(settings.trackRequestTime || settings.completionNotification?.enabled === true);
   namespace.captureSiteIcon(store, location.hostname).then(async (dataUrl) => {
     if (!dataUrl) return;
     namespace.SiteProfiles.setSiteIcons(await store.getSiteIcons());
@@ -37,6 +43,7 @@
     const nextSettings = changes[namespace.STORAGE_KEYS.settings]?.newValue;
     if (nextSettings) {
       liveSettings = namespace.historyModel.sanitizeSettings(nextSettings);
+      requestTiming.setEnabled(liveSettings.trackRequestTime || liveSettings.completionNotification?.enabled === true);
       panel.setLauncherEnabled(nextSettings.launcherEnabled !== false);
       if (liveSettings.launcherEnabled) discoverComposer();
       if (changes[namespace.STORAGE_KEYS.settings]?.oldValue?.language !== liveSettings.language) panel.setLanguage(liveSettings.language);
@@ -50,7 +57,12 @@
       }, 50);
     }
   });
-  const sendDetector = new namespace.SendDetector(adapter, recordSend);
+  const sendDetector = new namespace.SendDetector(
+    adapter,
+    recordSend,
+    (context) => requestTiming.capture(context.site),
+    (context, metadata) => startRequestTiming(context, metadata)
+  );
 
   document.addEventListener("focusin", handleFocus, true);
   document.addEventListener("input", handleInput, true);
@@ -60,6 +72,7 @@
   document.addEventListener("click", handleSendControl, true);
   window.addEventListener("scroll", () => panel.reposition(), true);
   window.addEventListener("resize", () => panel.reposition());
+  window.addEventListener("pagehide", () => requestTiming.finish("cancelled"));
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") recordSnapshot();
   });
@@ -133,7 +146,25 @@
     });
   }
 
-  async function recordSend(text, context) {
+  function notifyRequestCompleted(result) {
+    if (liveSettings.completionNotification?.enabled !== true) return;
+    try {
+      chrome.runtime.sendMessage({ type: "AIH_REQUEST_COMPLETED", event: result }, () => void chrome.runtime.lastError);
+    } catch (error) {
+      console.warn("[AI 输入历史] 发送完成通知失败", error);
+    }
+  }
+
+  function startRequestTiming(context, metadata = {}) {
+    if (!context) return null;
+    const sentAt = Number.isFinite(metadata.sentAt) ? metadata.sentAt : Date.now();
+    if (requestTiming.active && Math.abs(sentAt - requestTiming.active.startedAt) < 1500) return requestTiming.active;
+    const captured = metadata.timing || requestTiming.capture(context.site);
+    if (captured) captured.startedAt = sentAt;
+    return requestTiming.start(context.site, captured, { promptText: metadata.promptText || "", pageUrl: location.href });
+  }
+
+  async function recordSend(text, context, source, metadata = {}) {
     if (!text.trim()) return;
     clearTimeout(draftTimer);
     lastSnapshotText = text;
@@ -141,13 +172,17 @@
       historyNavigator.reset();
       activeContext = { ...context, sessionId: makeSessionId() };
     }
+    const tracking = startRequestTiming(context, metadata);
+    const sendContext = { ...context, sentAt: metadata.sentAt || Date.now(), trackRequestTime: liveSettings.trackRequestTime && Boolean(tracking) };
     return queueRecord(async () => {
       try {
-        await store.addEntry(text, "send", context);
+        const entry = await store.addEntry(text, "send", sendContext);
+        if (liveSettings.trackRequestTime) requestTiming.attach(tracking, entry?.id);
         await store.saveDraft(context.fieldKey, "", context);
         if (panel.isOpen()) await panel.refresh();
       } catch (error) {
         lastSnapshotText = "";
+        if (requestTiming.active === tracking) requestTiming.finish("failed");
         throw error;
       }
     });
@@ -165,6 +200,11 @@
   }
 
   function handleSendControl(event) {
+    const stop = event.composedPath().some((node) => node?.matches?.('[data-testid="stop-button"],button[aria-label="Stop streaming"],button[aria-label="停止生成"]'));
+    if (stop && (event.button == null || event.button === 0)) {
+      sendDetector.cancelEnter();
+      requestTiming.finish("cancelled");
+    }
     sendDetector.handlePointerDown(event, activeInput, activeContext);
   }
 

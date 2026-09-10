@@ -5,6 +5,16 @@
   const numericFields = ["historyLimit", "sendLimit", "snapshotSeconds"];
   const status = document.querySelector("#status");
   const launcherToggle = document.querySelector("#launcherEnabled");
+  const timingToggle = document.querySelector("#trackRequestTime");
+  const notifyToggle = document.querySelector("#notifyEnabled");
+  const notifyProvider = document.querySelector("#notifyProvider");
+  const testNotificationButton = document.querySelector("#testNotification");
+  const notificationInputs = {
+    barkUrl: "#notifyBarkUrl", serverChanKey: "#notifyServerChanKey", pushPlusToken: "#notifyPushPlusToken",
+    ntfyUrl: "#notifyNtfyUrl", ntfyTopic: "#notifyNtfyTopic", gotifyUrl: "#notifyGotifyUrl", gotifyToken: "#notifyGotifyToken",
+    dingtalkWebhook: "#notifyDingtalkWebhook", feishuWebhook: "#notifyFeishuWebhook", wecomWebhook: "#notifyWecomWebhook",
+    customMethod: "#notifyCustomMethod", customUrl: "#notifyCustomUrl", customHeaders: "#notifyCustomHeaders", customBody: "#notifyCustomBody"
+  };
   const domainInput = document.querySelector("#domainInput");
   const domainList = document.querySelector("#domainList");
   const shortcutCapture = document.querySelector("#shortcutCapture");
@@ -28,6 +38,13 @@
     input.addEventListener("change", () => persistSettings({ [name]: input.value }, namespace.i18n.t("status.saved")));
   });
   launcherToggle.checked = settings.launcherEnabled;
+  timingToggle.checked = settings.trackRequestTime;
+  timingToggle.addEventListener("change", () => persistSettings({ trackRequestTime: timingToggle.checked }, namespace.i18n.t("status.saved")));
+  renderNotificationSettings();
+  notifyToggle.addEventListener("change", changeNotificationEnabled);
+  notifyProvider.addEventListener("change", changeNotificationProvider);
+  Object.values(notificationInputs).forEach((selector) => document.querySelector(selector).addEventListener("change", saveNotificationConfig));
+  testNotificationButton.addEventListener("click", testNotification);
   launcherToggle.addEventListener("change", () => persistSettings(
     { launcherEnabled: launcherToggle.checked },
     namespace.i18n.t(launcherToggle.checked ? "status.launcherOn" : "status.launcherOff")
@@ -50,6 +67,8 @@
     if (!next) return;
     settings = namespace.historyModel.sanitizeSettings(next);
     launcherToggle.checked = settings.launcherEnabled;
+    timingToggle.checked = settings.trackRequestTime;
+    renderNotificationSettings();
     numericFields.forEach((name) => {
       const input = document.querySelector(`#${name}`);
       if (document.activeElement !== input) input.value = settings[name];
@@ -64,6 +83,8 @@
         settings = await store.patchSettings(patch);
         if (normalizeInputs) numericFields.forEach((name) => { document.querySelector(`#${name}`).value = settings[name]; });
         launcherToggle.checked = settings.launcherEnabled;
+        timingToggle.checked = settings.trackRequestTime;
+        renderNotificationSettings();
         if (patch.language) namespace.i18n.setLanguage(settings.language);
         applyLanguage();
         showStatus(message);
@@ -87,6 +108,110 @@
     languageSelect.value = namespace.i18n.language();
     renderDomains();
     if (!capturingShortcut) renderShortcut(settings.shortcut);
+  }
+
+  function collectNotificationConfig(overrides = {}) {
+    const current = settings.completionNotification || {};
+    const value = (name) => document.querySelector(notificationInputs[name]).value;
+    return {
+      ...current, enabled: notifyToggle.checked, provider: notifyProvider.value,
+      barkUrl: value("barkUrl"), serverChanKey: value("serverChanKey"), pushPlusToken: value("pushPlusToken"),
+      ntfyUrl: value("ntfyUrl"), ntfyTopic: value("ntfyTopic"), gotifyUrl: value("gotifyUrl"), gotifyToken: value("gotifyToken"),
+      dingtalkWebhook: value("dingtalkWebhook"), feishuWebhook: value("feishuWebhook"), wecomWebhook: value("wecomWebhook"),
+      customMethod: value("customMethod"), customUrl: value("customUrl"), customHeaders: value("customHeaders"), customBody: value("customBody"),
+      ...overrides
+    };
+  }
+
+  function renderNotificationSettings() {
+    const config = settings.completionNotification || { enabled: false, provider: "browser" };
+    notifyToggle.checked = config.enabled === true;
+    notifyProvider.value = config.provider || "browser";
+    Object.entries(notificationInputs).forEach(([name, selector]) => { document.querySelector(selector).value = config[name] ?? ""; });
+    document.querySelectorAll("[data-notify-provider]").forEach((section) => {
+      const active = section.dataset.notifyProvider === notifyProvider.value;
+      active ? section.classList.add("active") : section.classList.remove("active");
+    });
+  }
+
+  function renderNotificationSettingsPreview() {
+    document.querySelectorAll("[data-notify-provider]").forEach((section) => {
+      const active = section.dataset.notifyProvider === notifyProvider.value;
+      active ? section.classList.add("active") : section.classList.remove("active");
+    });
+  }
+
+  function requestPermission(request) {
+    return new Promise((resolve, reject) => {
+      if (!chrome.permissions?.request) { reject(new Error(namespace.i18n.t("notify.permissionUnavailable"))); return; }
+      chrome.permissions.request(request, (granted) => {
+        const error = chrome.runtime.lastError;
+        if (error) reject(error);
+        else granted ? resolve(true) : reject(new Error(namespace.i18n.t("notify.permissionDenied")));
+      });
+    });
+  }
+
+  async function ensureNotificationPermission(config) {
+    if (config.provider === "browser") return requestPermission({ permissions: ["notifications"] });
+    const origin = namespace.notificationModel.requiredOrigin(config);
+    if (!origin) throw new Error(namespace.i18n.t("notify.invalidConfig"));
+    return requestPermission({ origins: [origin] });
+  }
+
+  async function changeNotificationEnabled() {
+    const config = collectNotificationConfig();
+    if (config.enabled) {
+      try { await ensureNotificationPermission(config); }
+      catch (error) {
+        notifyToggle.checked = false;
+        showStatus(error.message || namespace.i18n.t("notify.permissionDenied"), true);
+        return;
+      }
+    }
+    await persistSettings({ completionNotification: { ...config, enabled: notifyToggle.checked } }, namespace.i18n.t("status.saved"));
+  }
+
+  async function changeNotificationProvider() {
+    renderNotificationSettingsPreview();
+    const config = collectNotificationConfig();
+    if (config.enabled) {
+      try { await ensureNotificationPermission(config); }
+      catch (error) {
+        notifyProvider.value = settings.completionNotification?.provider || "browser";
+        renderNotificationSettingsPreview();
+        showStatus(error.message || namespace.i18n.t("notify.permissionDenied"), true);
+        return;
+      }
+    }
+    await persistSettings({ completionNotification: config }, namespace.i18n.t("status.saved"));
+  }
+
+  function saveNotificationConfig() {
+    return persistSettings({ completionNotification: collectNotificationConfig() }, namespace.i18n.t("status.saved"));
+  }
+
+  function runtimeMessage(message) {
+    return new Promise((resolve, reject) => chrome.runtime.sendMessage(message, (response) => {
+      const error = chrome.runtime.lastError;
+      error ? reject(error) : resolve(response);
+    }));
+  }
+
+  async function testNotification() {
+    testNotificationButton.disabled = true;
+    try {
+      const config = collectNotificationConfig();
+      await ensureNotificationPermission(config);
+      await persistSettings({ completionNotification: config }, namespace.i18n.t("status.saved"));
+      const result = await runtimeMessage({ type: "AIH_NOTIFICATION_TEST" });
+      if (!result?.ok) throw new Error(result?.error || namespace.i18n.t("notify.testFailed"));
+      showStatus(namespace.i18n.t("notify.testSent"));
+    } catch (error) {
+      showStatus(error.message || namespace.i18n.t("notify.testFailed"), true);
+    } finally {
+      testNotificationButton.disabled = false;
+    }
   }
 
   async function addDomain(event) {

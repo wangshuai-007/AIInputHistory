@@ -4,6 +4,13 @@
   const STORAGE_KEY = "aiInputHistoryState";
   const SETTINGS_KEY = "aiInputHistorySettings";
   const DEFAULT_SHORTCUT = "Ctrl+R";
+  const DEFAULT_COMPLETION_NOTIFICATION = Object.freeze({
+    enabled: false, provider: "browser", barkUrl: "", serverChanKey: "", pushPlusToken: "",
+    ntfyUrl: "https://ntfy.sh", ntfyTopic: "", gotifyUrl: "", gotifyToken: "",
+    dingtalkWebhook: "", feishuWebhook: "", wecomWebhook: "",
+    customMethod: "POST", customUrl: "", customHeaders: "{}",
+    customBody: '{"title":"{{title}}","message":"{{message}}"}'
+  });
   const DEFAULT_SETTINGS = Object.freeze({
     historyLimit: 100,
     sendLimit: 10,
@@ -11,6 +18,8 @@
     shortcut: DEFAULT_SHORTCUT,
     language: "zh-CN",
     launcherEnabled: true,
+    trackRequestTime: false,
+    completionNotification: DEFAULT_COMPLETION_NOTIFICATION,
     customDomains: []
   });
 
@@ -24,8 +33,29 @@
       shortcut: normalizeShortcut(source.shortcut),
       language: source.language === "en" ? "en" : "zh-CN",
       launcherEnabled: source.launcherEnabled !== false,
+      trackRequestTime: source.trackRequestTime === true,
+      completionNotification: sanitizeCompletionNotification(source.completionNotification),
       customDomains: [...new Set((Array.isArray(source.customDomains) ? source.customDomains : [])
         .map(normalizeDomain).filter(Boolean))].slice(0, 100)
+    };
+  }
+
+  function sanitizeCompletionNotification(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const providers = new Set(["browser", "bark", "serverchan", "pushplus", "ntfy", "gotify", "dingtalk", "feishu", "wecom", "custom"]);
+    const methods = new Set(["GET", "POST", "PUT", "PATCH"]);
+    const text = (key, max, fallback = "") => String(source[key] ?? fallback).trim().slice(0, max);
+    const method = String(source.customMethod || DEFAULT_COMPLETION_NOTIFICATION.customMethod).toUpperCase();
+    return {
+      enabled: source.enabled === true,
+      provider: providers.has(source.provider) ? source.provider : DEFAULT_COMPLETION_NOTIFICATION.provider,
+      barkUrl: text("barkUrl", 1000), serverChanKey: text("serverChanKey", 300), pushPlusToken: text("pushPlusToken", 300),
+      ntfyUrl: text("ntfyUrl", 1000, DEFAULT_COMPLETION_NOTIFICATION.ntfyUrl), ntfyTopic: text("ntfyTopic", 300),
+      gotifyUrl: text("gotifyUrl", 1000), gotifyToken: text("gotifyToken", 300),
+      dingtalkWebhook: text("dingtalkWebhook", 2000), feishuWebhook: text("feishuWebhook", 2000), wecomWebhook: text("wecomWebhook", 2000),
+      customMethod: methods.has(method) ? method : DEFAULT_COMPLETION_NOTIFICATION.customMethod,
+      customUrl: text("customUrl", 2000), customHeaders: text("customHeaders", 8000, "{}"),
+      customBody: String(source.customBody ?? DEFAULT_COMPLETION_NOTIFICATION.customBody).slice(0, 16000)
     };
   }
 
@@ -242,6 +272,10 @@
         if (normalizedKind === "snapshot" && latest?.text === text) return latest;
 
         const entry = { id: makeId(), text, kind: normalizedKind, createdAt: Date.now(), site: context.site, title: context.title, fieldKey: context.fieldKey, sessionId: context.sessionId || "" };
+        if (normalizedKind === "send" && Number.isFinite(context.sentAt)) entry.createdAt = context.sentAt;
+        if (normalizedKind === "send" && context.trackRequestTime) {
+          entry.requestTiming = { status: "pending", startedAt: entry.createdAt };
+        }
         const existingEntries = normalizedKind === "send"
           ? collapseSnapshotsForSend(state.entries, context.fieldKey, context.sessionId)
           : state.entries;
@@ -340,6 +374,26 @@
       });
     }
 
+    /** Updates timing metadata on an existing send only, without reviving cleared or evicted history. */
+    async updateRequestTiming(id, timing) {
+      if (!["completed", "cancelled", "failed", "timeout"].includes(timing?.status)) throw new Error("无效计时状态");
+      if (!Number.isFinite(timing.startedAt)) throw new Error("无效发送时间");
+      const value = { status: timing.status, startedAt: timing.startedAt };
+      if (timing.status === "completed") {
+        if (!Number.isFinite(timing.completedAt) || timing.completedAt < timing.startedAt) throw new Error("无效回复时间");
+        value.completedAt = timing.completedAt;
+        value.durationMs = timing.completedAt - timing.startedAt;
+      }
+      return withStorageLock(async () => {
+        const state = await this.getState();
+        const entry = state.entries.find((item) => item.id === id && item.kind === "send");
+        if (!entry) return false;
+        entry.requestTiming = value;
+        await storageSet({ [STORAGE_KEY]: state });
+        return true;
+      });
+    }
+
     async clearHistory() {
       await withStorageLock(async () => {
         const state = await this.getState();
@@ -349,7 +403,8 @@
   }
 
   namespace.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
+  namespace.DEFAULT_COMPLETION_NOTIFICATION = DEFAULT_COMPLETION_NOTIFICATION;
   namespace.HistoryStore = HistoryStore;
   namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY };
-  namespace.historyModel = { collapseSnapshotsForSend, compactSentSnapshots, filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeSettings, shortcutFromEvent };
+  namespace.historyModel = { collapseSnapshotsForSend, compactSentSnapshots, filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeCompletionNotification, sanitizeSettings, shortcutFromEvent };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

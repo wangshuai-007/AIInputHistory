@@ -27,7 +27,9 @@ function element() {
 
 test("修改自动快照秒数时无需关闭输入框即可立即保存", async () => {
   const elements = Object.fromEntries([
-    "#historyLimit", "#sendLimit", "#snapshotSeconds", "#launcherEnabled", "#domainInput",
+    "#historyLimit", "#sendLimit", "#snapshotSeconds", "#launcherEnabled", "#domainInput", "#trackRequestTime",
+    "#notifyEnabled", "#notifyProvider", "#testNotification", "#notifyBarkUrl", "#notifyServerChanKey", "#notifyPushPlusToken",
+    "#notifyNtfyUrl", "#notifyNtfyTopic", "#notifyGotifyUrl", "#notifyGotifyToken", "#notifyDingtalkWebhook", "#notifyFeishuWebhook", "#notifyWecomWebhook", "#notifyCustomMethod", "#notifyCustomUrl", "#notifyCustomHeaders", "#notifyCustomBody",
     "#domainList", "#domainForm", "#clear", "#status", "#totalCount", "#sendCount", "#draftCount",
     "#shortcutCapture", "#shortcutDisable", "#languageSelect", "#clearDialog", "#clearDialogError", "#cancelClear", "#confirmClear", "#extensionVersion"
   ].map((selector) => [selector, element()]));
@@ -35,14 +37,24 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
   let clearCount = 0;
   class HistoryStore {
     async getSettings() {
-      return { historyLimit: 100, sendLimit: 10, snapshotSeconds: 60, shortcut: "Ctrl+R", language: "zh-CN", launcherEnabled: true, customDomains: [] };
+      return {
+        historyLimit: 100, sendLimit: 10, snapshotSeconds: 60, shortcut: "Ctrl+R", language: "zh-CN", launcherEnabled: true, trackRequestTime: false,
+        completionNotification: { enabled: false, provider: "browser", barkUrl: "", serverChanKey: "", pushPlusToken: "", ntfyUrl: "https://ntfy.sh", ntfyTopic: "", gotifyUrl: "", gotifyToken: "", dingtalkWebhook: "", feishuWebhook: "", wecomWebhook: "", customMethod: "POST", customUrl: "", customHeaders: "{}", customBody: '{"title":"{{title}}","message":"{{message}}"}' },
+        customDomains: []
+      };
     }
     async getState() { return { entries: [], drafts: {} }; }
     async patchSettings(patch) { saves.push(patch); return { ...await this.getSettings(), ...patch, snapshotSeconds: Number(patch.snapshotSeconds || 60) }; }
     async clearHistory() { clearCount += 1; }
   }
   const context = {
-    chrome: { runtime: { getManifest: () => ({ version: "1.26.0" }) }, storage: { onChanged: { addListener(listener) { context.storageListener = listener; } } } },
+    chrome: {
+      runtime: { lastError: null, getManifest: () => ({ version: "1.26.0" }), sendMessage(message, callback) { callback({ ok: true, type: message.type }); } },
+      permissions: { request(request, callback) { context.permissionRequests.push(request); callback(true); } },
+      storage: { onChanged: { addListener(listener) { context.storageListener = listener; } }
+      }
+    },
+    permissionRequests: [],
     AIInputHistory: { HistoryStore, i18n: (() => {
       let language = "zh-CN";
       return { setLanguage(value) { language = value === "en" ? "en" : "zh-CN"; }, language: () => language, localize() {}, t: (key) => key };
@@ -54,6 +66,7 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
     document: {
       documentElement: { lang: "" },
       querySelector: (selector) => elements[selector],
+      querySelectorAll: () => [],
       createElement: () => element(),
       createTextNode: (text) => ({ text })
     },
@@ -85,7 +98,19 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
   assert.equal(elements["#extensionVersion"].textContent, "v1.26.0");
   context.storageListener({ settings: { newValue: { ...await new HistoryStore().getSettings(), launcherEnabled: false } } }, "local");
   assert.equal(elements["#launcherEnabled"].checked, false);
+  elements["#trackRequestTime"].checked = true;
+  elements["#trackRequestTime"].listeners.change();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(saves.at(-1).trackRequestTime, true);
   assert.deepEqual(Object.keys(saves[0]), ["snapshotSeconds"]);
+
+  elements["#notifyEnabled"].checked = true;
+  elements["#notifyEnabled"].listeners.change();
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(context.permissionRequests.at(-1).permissions[0], "notifications");
+  assert.equal(saves.at(-1).completionNotification.enabled, true);
+  assert.equal(saves.at(-1).completionNotification.provider, "browser");
 
   elements["#clear"].listeners.click();
   assert.equal(elements["#clearDialog"].open, true);

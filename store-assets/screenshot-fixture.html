@@ -24,7 +24,7 @@
     document.querySelectorAll("[data-copy-placeholder]").forEach((el)=>{el.placeholder=copy[el.dataset.copyPlaceholder]});
     globalThis.__AIH_TEST_OPEN_SHADOW = true;
     const memory = globalThis.__testMemory = {
-      aiInputHistorySettings:{historyLimit:100,sendLimit:10,snapshotSeconds:60,shortcut:"Ctrl+R",language:lang,launcherEnabled:true,customDomains:["127.0.0.1"]},
+      aiInputHistorySettings:{historyLimit:100,sendLimit:10,snapshotSeconds:60,shortcut:"Ctrl+R",language:lang,launcherEnabled:true,trackRequestTime:new URLSearchParams(location.search).has("timing"),customDomains:["127.0.0.1"]},
       aiInputHistoryState:{entries:[
         {id:"1",text:lang==="en"?"Create a migration checklist for the release":"为这次发布整理一份迁移检查清单",kind:"send",createdAt:Date.now()-62000,site:"127.0.0.1",title:"AI Workspace",fieldKey:"history-1",sessionId:"1"},
         {id:"2",text:lang==="en"?"Compare the two implementation approaches":"比较这两种实现方案",kind:"send",createdAt:Date.now()-184000,site:"127.0.0.1",title:"AI Workspace",fieldKey:"history-2",sessionId:"2"},
@@ -34,7 +34,8 @@
     const storageListeners=[];
     globalThis.chrome={runtime:{lastError:null},storage:{onChanged:{addListener(listener){storageListeners.push(listener)}},local:{get(key,callback){callback({[key]:memory[key]})},set(value,callback){const changes=Object.fromEntries(Object.entries(value).map(([key,newValue])=>[key,{oldValue:memory[key],newValue}]));Object.assign(memory,value);storageListeners.forEach((listener)=>listener(changes,"local"));callback()}}}};
   </script>
-  <script src="../src/history-store.js"></script><script src="../src/i18n.js"></script><script src="../src/site-profiles.js"></script><script>AIInputHistory.SiteProfiles.forSite("chatgpt.com").domains.push("127.0.0.1");</script><script src="../src/site-icon.js"></script><script src="../src/input-adapter.js"></script><script src="../src/history-navigator.js"></script><script src="../src/draggable.js"></script><script src="../src/send-detector.js"></script><script src="../src/site-filter.js"></script><script src="../src/theme-observer.js"></script><script src="../src/history-panel-utils.js"></script><script src="../src/clear-confirmation.js"></script><script src="../src/history-panel-style.js"></script><script src="../src/history-panel.js"></script><script src="../src/content.js"></script>
+  <script src="../src/history-store.js"></script><script src="../src/i18n.js"></script><script src="../src/site-profiles.js"></script><script>AIInputHistory.SiteProfiles.forSite("chatgpt.com").domains.push("127.0.0.1");</script><script src="../src/site-icon.js"></script><script src="../src/input-adapter.js"></script><script src="../src/history-navigator.js"></script><script src="../src/draggable.js"></script><script src="../src/send-detector.js"></script><script src="../src/request-timing.js"></script><script src="../src/request-timing-view.js"></script><script src="../src/site-filter.js"></script><script src="../src/theme-observer.js"></script><script src="../src/history-panel-utils.js"></script><script src="../src/clear-confirmation.js"></script><script src="../src/history-panel-style.js"></script><script src="../src/history-panel.js"></script><script src="../src/content.js"></script>
   <script>setTimeout(()=>document.querySelector(".composer").focus(),120);setTimeout(()=>document.querySelector("[data-ai-input-history='root']")?.shadowRoot?.querySelector(".launcher")?.click(),520);</script>
+<script src="../tests/timing-fixture.js"></script>
 </body>
 </html>

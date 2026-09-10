@@ -34,9 +34,10 @@ The content script detects AI chat composers and displays the local-history cont
 - User-generated content；
 - Form data / Personal communications（若 Dashboard 提供对应分类）；
 - Web browsing activity：仅域名和页面标题，用于标记记录来源；
-- 数据仅保存在 `chrome.storage.local`；
+- 历史与设置默认保存在 `chrome.storage.local`；
 - 不出售、不用于广告、不用于信用评估；
-- 不向开发者服务器或第三方传输；
+- 不向开发者服务器传输；仅当用户主动启用第三方/自定义完成通知时，按用户配置向对应通知服务发送通知数据；
+- Webhook、Token 等通知凭据只保存在扩展本地；
 - 用途符合 Chrome Web Store User Data Policy 的 Limited Use 要求。
 
 ## 发布前仍需人工完成
@@ -50,4 +51,4 @@ The content script detects AI chat composers and displays the local-history cont
 
 ## 权限审核提醒
 
-当前内容脚本使用 `<all_urls>`，用于支持用户自行添加任意 AI 域名。该权限可能增加人工审核时间。商店说明、隐私政策和权限理由必须保持一致，不得声称扩展只访问固定站点。
+当前内容脚本使用 `<all_urls>`，用于支持用户自行添加任意 AI 域名。另声明可选 `notifications` 和可选 HTTP/HTTPS host permissions：前者只在选择浏览器系统通知时申请，后者只在用户主动配置第三方通知或自定义请求时按实际目标域名申请。以上权限可能增加人工审核时间，商店说明、隐私政策和 Dashboard 权限理由必须保持一致，不得声称扩展只访问固定站点或永不向用户指定的通知服务发起请求。

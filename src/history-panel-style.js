@@ -94,6 +94,14 @@
     .pin-badge { color:var(--accent-strong); font-size:10px; white-space:nowrap; }
     .pin-error { color:var(--text); padding:8px 16px; margin:0; border-left:3px solid #c85147; font-size:12px; }
     .pin-button:disabled { opacity:.55; cursor:wait; }
+    .request-clock { display:none; font-size:11px; font-weight:650; font-variant-numeric:tabular-nums; }
+    .launcher.timing-active { width:auto; min-width:34px; max-width:76px; padding:0 7px; }
+    .launcher.timing-active .launcher-symbol { opacity:0; }
+    .launcher.timing-active .request-clock { display:block; }
+    .time-precise { display:none; }
+    .entry-row:hover .time-short,.entry-row:focus-within .time-short { display:none; }
+    .entry-row:hover .time-precise,.entry-row:focus-within .time-precise { display:inline; }
+    .reply-timing { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:3px 10px; margin-top:8px; color:var(--muted); font-size:10px; font-variant-numeric:tabular-nums; text-align:right; }
     .head,.foot { flex-shrink:0; }
   `;
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

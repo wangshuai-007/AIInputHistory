@@ -31,11 +31,13 @@
   }
 
   class SendDetector {
-    constructor(adapter, onSend) {
+    constructor(adapter, onSend, capture = () => null, onRequest = () => null) {
       this.adapter = adapter;
       this.onSend = onSend;
       this.lastEmission = null;
       this.pendingEnter = null;
+      this.capture = capture;
+      this.onRequest = onRequest;
     }
 
     watchEnter(event, input, context) {
@@ -43,7 +45,7 @@
       const text = this.adapter.getText(input);
       if (!text.trim()) return;
       this.cancelEnter();
-      const candidate = { input, text, context, done: false };
+      const candidate = { input, text, context, done: false, metadata: { sentAt: Date.now(), timing: this.capture(context), promptText: text } };
       candidate.onInput = (inputEvent) => {
         if (["insertLineBreak", "insertParagraph"].includes(inputEvent.inputType)
           || (this.adapter.getText(input).trim() && this.adapter.getText(input) !== text)) this.cancelEnter();
@@ -59,12 +61,12 @@
             this.cancelEnter();
           } else if (didComposerClear(candidate.text, current, connected)) {
             this.cancelEnter();
-            this.emit(candidate.text, candidate.context, "keyboard");
+            this.emit(candidate.text, candidate.context, "keyboard", candidate.metadata);
           } else if (current !== candidate.text) {
             this.cancelEnter();
           } else if (index === delays.length - 1) {
             this.cancelEnter();
-            if (namespace.SiteProfiles.isSendShortcut(event, context.site)) this.emit(candidate.text, candidate.context, "keyboard-attempt");
+            if (namespace.SiteProfiles.isSendShortcut(event, context.site)) this.emit(candidate.text, candidate.context, "keyboard-attempt", candidate.metadata);
           }
         }, delay);
       });
@@ -80,29 +82,34 @@
 
     handleSubmit(event, input, context) {
       if (!input || !context || !event.target.contains(input)) return;
-      this.emitCurrent(input, context, "form");
+      const metadata = { sentAt: Date.now(), timing: this.capture(context), promptText: this.adapter.getText(input) };
+      this.onRequest(context, metadata);
+      this.emitCurrent(input, context, "form", metadata);
     }
 
     handlePointerDown(event, input, context) {
-      if (!input || !context || (event.button != null && event.button !== 0) || event.isPrimary === false) return;
+      const nonPrimaryPointer = event.type?.startsWith("pointer") && event.isPrimary === false;
+      if (!input || !context || (event.button != null && event.button !== 0) || nonPrimaryPointer) return;
       const path = typeof event.composedPath === "function" ? event.composedPath() : [event.target];
       const button = path.map((target) => getSendButton(target, input)).find(Boolean);
       if (!button) return;
-      this.emitCurrent(input, context, "button");
+      const metadata = { sentAt: Date.now(), timing: this.capture(context), promptText: this.adapter.getText(input) };
+      this.onRequest(context, metadata);
+      this.emitCurrent(input, context, "button", metadata);
     }
 
-    emitCurrent(input, context, source) {
+    emitCurrent(input, context, source, metadata = { sentAt: Date.now(), timing: this.capture(context), promptText: this.adapter.getText(input) }) {
       const text = this.adapter.getText(input);
-      if (text.trim()) this.emit(text, context, source);
+      if (text.trim()) this.emit(text, context, source, metadata);
     }
 
-    emit(text, context, source) {
+    emit(text, context, source, metadata) {
       this.cancelEnter();
       const fingerprint = `${context.fieldKey}|${text}`;
       const now = Date.now();
       if (this.lastEmission?.fingerprint === fingerprint && now - this.lastEmission.at < 1500) return;
       this.lastEmission = { fingerprint, at: now };
-      this.onSend(text, context, source);
+      this.onSend(text, context, source, metadata);
     }
   }
 
