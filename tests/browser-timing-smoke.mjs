@@ -101,6 +101,17 @@ try {
   const running = await evaluate(`(()=>{const l=document.querySelector("[data-ai-input-history='root']").shadowRoot.querySelector(".launcher"); return {active:l.classList.contains("timing-active"),clock:l.querySelector(".request-clock").textContent}})()`);
   assert.equal(running.active, true, `发送后悬浮按钮应进入计时状态；页面状态=${JSON.stringify(await evaluate(`({settings:__testMemory.aiInputHistorySettings,entries:__testMemory.aiInputHistoryState.entries.slice(0,5),profile:AIInputHistory.SiteProfiles.forSite(location.hostname)?.id||null,sample:AIInputHistory.requestTimingModel.sampleChatGPT()})`))}；浏览器事件=${JSON.stringify(browserEvents.slice(-8))}`);
   assert.match(running.clock, /^\d+s$/, "悬浮按钮应显示当前请求秒数");
+  const startedBeforeReopen = await evaluate(`__testMemory.aiInputHistoryState.entries.find((item)=>item.text==="计时验收")?.requestTiming?.startedAt`);
+  await send("Page.navigate", { url: "about:blank" });
+  await waitFor(`location.href === "about:blank"`);
+  await sleep(300);
+  await send("Page.navigate", { url: targetUrl });
+  await waitFor(`location.href.includes("screenshot-fixture.html") && Boolean(document.querySelector("[data-ai-input-history='root']")?.shadowRoot?.querySelector(".launcher"))`);
+  await sleep(1000);
+  const afterReopen = await evaluate(`(()=>{const l=document.querySelector("[data-ai-input-history='root']").shadowRoot.querySelector(".launcher"); const entry=__testMemory.aiInputHistoryState.entries.find((item)=>item.text==="计时验收"); return {active:l.classList.contains("timing-active"),clock:l.querySelector(".request-clock").textContent,startedAt:entry?.requestTiming?.startedAt}})()`);
+  assert.equal(afterReopen.active, true, "离开页面后重新打开同一会话 URL 应恢复正在进行的计时");
+  assert.equal(afterReopen.startedAt, startedBeforeReopen, "重新打开同一 URL 后应保留最初发送时间");
+  assert.match(afterReopen.clock, /^\d+s$/, "重新打开同一 URL 后悬浮按钮应继续显示累计秒数");
   await evaluate(`([...document.querySelectorAll("button")].find((button)=>button.textContent==="模拟回复完成")?.click(),true)`);
   await sleep(1400);
   const finalState = await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history='root']").shadowRoot; const entry=__testMemory.aiInputHistoryState.entries.find((item)=>item.text==="计时验收"); const row=[...root.querySelectorAll(".entry-row")].find((item)=>item.textContent.includes("计时验收")); return {timing:entry?.requestTiming||null,launcherActive:root.querySelector(".launcher").classList.contains("timing-active"),timingText:row?.querySelector(".reply-timing")?.textContent||"",preciseTime:row?.querySelector(".time-precise")?.textContent||""}})()`);

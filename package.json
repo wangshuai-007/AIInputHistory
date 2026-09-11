@@ -1,6 +1,6 @@
 {
   "name": "ai-input-history-extension",
-  "version": "1.28.0",
+  "version": "1.29.0",
   "private": true,
   "description": "Local-first input history for AI chat websites",
   "scripts": {
@@ -11,6 +11,8 @@
     "assets:store": "python scripts/generate-store-assets.py",
     "package:store": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-store.ps1"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "license": "MIT"
 }

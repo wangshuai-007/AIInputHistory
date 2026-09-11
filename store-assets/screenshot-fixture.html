@@ -12,7 +12,7 @@
 <body>
   <div class="shell"><aside class="side"><div class="brand"><img src="../assets/icons/icon-48.png" alt=""><span>AI Workspace</span></div><div class="nav"><div class="active"><span class="dot"></span><span data-copy="newChat">New chat</span></div><div><span class="dot"></span><span data-copy="library">Prompt library</span></div><div><span class="dot"></span><span data-copy="settings">Settings</span></div></div></aside>
   <main class="main"><header class="top"><strong data-copy="conversation">AI conversation</strong><span class="privacy" data-copy="privacy">Your input history stays in this browser</span></header><section class="chat"><div class="thread"><div class="message user" data-copy="question">Summarize the key decisions from this project discussion.</div><div class="message assistant" data-copy="answer">The project now records drafts locally, consolidates snapshots after sending, and lets you retrieve previous prompts with the arrow keys.</div></div></section>
-  <div class="composer-wrap"><textarea class="composer" aria-label="Send message" data-copy-placeholder="placeholder"></textarea><button class="send" type="button" aria-label="Send"><svg viewBox="0 0 24 24" fill="none"><path d="m6 12 6-6 6 6m-6-6v13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span class="caption" data-copy="caption">Focus the input, then browse and restore local prompt history.</span></div></main></div>
+  <div class="composer-wrap"><textarea class="composer" aria-label="Send message" data-copy-placeholder="placeholder"></textarea><button class="send" type="button" aria-label="Send" data-testid="send-button"><svg viewBox="0 0 24 24" fill="none"><path d="m6 12 6-6 6 6m-6-6v13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span class="caption" data-copy="caption">Focus the input, then browse and restore local prompt history.</span></div></main></div>
   <script>
     const lang = new URLSearchParams(location.search).get("lang") === "zh-CN" ? "zh-CN" : "en";
     const copy = {
@@ -23,7 +23,7 @@
     document.querySelectorAll("[data-copy]").forEach((el)=>{el.textContent=copy[el.dataset.copy]});
     document.querySelectorAll("[data-copy-placeholder]").forEach((el)=>{el.placeholder=copy[el.dataset.copyPlaceholder]});
     globalThis.__AIH_TEST_OPEN_SHADOW = true;
-    const memory = globalThis.__testMemory = {
+    const defaults = {
       aiInputHistorySettings:{historyLimit:100,sendLimit:10,snapshotSeconds:60,shortcut:"Ctrl+R",language:lang,launcherEnabled:true,trackRequestTime:new URLSearchParams(location.search).has("timing"),customDomains:["127.0.0.1"]},
       aiInputHistoryState:{entries:[
         {id:"1",text:lang==="en"?"Create a migration checklist for the release":"为这次发布整理一份迁移检查清单",kind:"send",createdAt:Date.now()-62000,site:"127.0.0.1",title:"AI Workspace",fieldKey:"history-1",sessionId:"1"},
@@ -31,8 +31,19 @@
         {id:"3",text:lang==="en"?"Explain why the save event was missed":"解释为什么没有触发保存事件",kind:"send",createdAt:Date.now()-420000,site:"127.0.0.1",title:"AI Workspace",fieldKey:"history-3",sessionId:"3"}
       ],drafts:{},positions:{},siteIcons:{}}
     };
+    const savedMemory=JSON.parse(localStorage.getItem("aih-fixture-memory")||"null")||defaults;
+    savedMemory.aiInputHistorySettings.trackRequestTime=new URLSearchParams(location.search).has("timing");
+    const memory = globalThis.__testMemory = savedMemory;
     const storageListeners=[];
-    globalThis.chrome={runtime:{lastError:null},storage:{onChanged:{addListener(listener){storageListeners.push(listener)}},local:{get(key,callback){callback({[key]:memory[key]})},set(value,callback){const changes=Object.fromEntries(Object.entries(value).map(([key,newValue])=>[key,{oldValue:memory[key],newValue}]));Object.assign(memory,value);storageListeners.forEach((listener)=>listener(changes,"local"));callback()}}}};
+    let lockToken="";
+    globalThis.chrome={runtime:{lastError:null,sendMessage(message,callback){
+      if(message.type==="AIH_STORAGE_LOCK_ACQUIRE"){lockToken="fixture";callback({token:lockToken});return}
+      if(message.type==="AIH_STORAGE_LOCK_RELEASE"){callback({released:message.token===lockToken});lockToken="";return}
+      if(message.type==="AIH_TIMING_SESSION_SAVE"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");for(const [key,value] of Object.entries(states))if(value?.requestId===message.state.requestId)delete states[key];states[`${message.state.site}${message.state.path}`]=message.state;localStorage.setItem("aih-fixture-timings",JSON.stringify(states));callback({ok:true});return}
+      if(message.type==="AIH_TIMING_SESSION_LOAD"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");callback({ok:true,state:states[`${message.site}${message.path}`]||null});return}
+      if(message.type==="AIH_TIMING_SESSION_CLEAR"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");for(const [key,value] of Object.entries(states))if((message.requestId&&value?.requestId===message.requestId)||(!message.requestId&&key===`${message.site}${message.path}`))delete states[key];localStorage.setItem("aih-fixture-timings",JSON.stringify(states));callback({ok:true});return}
+      callback({ok:true});
+    }},storage:{onChanged:{addListener(listener){storageListeners.push(listener)}},local:{get(key,callback){callback({[key]:memory[key]})},set(value,callback){const changes=Object.fromEntries(Object.entries(value).map(([key,newValue])=>[key,{oldValue:memory[key],newValue}]));Object.assign(memory,value);localStorage.setItem("aih-fixture-memory",JSON.stringify(memory));storageListeners.forEach((listener)=>listener(changes,"local"));callback()}}}};
   </script>
   <script src="../src/history-store.js"></script><script src="../src/i18n.js"></script><script src="../src/site-profiles.js"></script><script>AIInputHistory.SiteProfiles.forSite("chatgpt.com").domains.push("127.0.0.1");</script><script src="../src/site-icon.js"></script><script src="../src/input-adapter.js"></script><script src="../src/history-navigator.js"></script><script src="../src/draggable.js"></script><script src="../src/send-detector.js"></script><script src="../src/request-timing.js"></script><script src="../src/request-timing-view.js"></script><script src="../src/site-filter.js"></script><script src="../src/theme-observer.js"></script><script src="../src/history-panel-utils.js"></script><script src="../src/clear-confirmation.js"></script><script src="../src/history-panel-style.js"></script><script src="../src/history-panel.js"></script><script src="../src/content.js"></script>
   <script>setTimeout(()=>document.querySelector(".composer").focus(),120);setTimeout(()=>document.querySelector("[data-ai-input-history='root']")?.shadowRoot?.querySelector(".launcher")?.click(),520);</script>

@@ -59,7 +59,7 @@ async function setup() {
   };
   context.globalThis.AIInputHistory = {
     HistoryStore: Store, HistoryPanel: Panel,
-    RequestTiming: class { setEnabled() {} capture() { return null; } start() { return null; } attach() {} finish() {} },
+    RequestTiming: class { setEnabled() {} async restore() { return null; } capture() { return null; } start() { return null; } attach() {} finish() {} },
     i18n: { setLanguage() {} },
     SiteProfiles: { isAllowedSite: () => true, setSiteIcons() {} },
     captureSiteIcon: async () => null,

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
-  "version": "1.28.0",
+  "version": "1.29.0",
   "description": "__MSG_extensionDescription__",
   "default_locale": "zh_CN",
   "icons": {
@@ -10,9 +10,16 @@
     "48": "assets/icons/icon-48.png",
     "128": "assets/icons/icon-128.png"
   },
-  "permissions": ["storage"],
-  "optional_permissions": ["notifications"],
-  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "permissions": [
+    "storage"
+  ],
+  "optional_permissions": [
+    "notifications"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -26,7 +33,9 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "<all_urls>"
+      ],
       "js": [
         "src/history-store.js",
         "src/i18n.js",
@@ -43,7 +52,7 @@
         "src/history-panel-utils.js",
         "src/clear-confirmation.js",
         "src/history-panel-style.js",
-      "src/history-panel.js",
+        "src/history-panel.js",
         "src/content.js"
       ],
       "run_at": "document_idle",
@@ -53,8 +62,12 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["assets/logos/*"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "assets/logos/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

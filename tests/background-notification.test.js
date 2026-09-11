@@ -12,20 +12,24 @@ function setup(config) {
   const notifications = [];
   const requests = [];
   const data = { aiInputHistorySettings: { language: "zh-CN", completionNotification: config } };
+  const sessionData = {};
   const context = {
     URL, URLSearchParams, Date, crypto: { randomUUID: () => "id" }, setTimeout, clearTimeout,
     fetch: async (url, options) => { requests.push({ url, options }); return { ok: true, status: 200, text: async () => "" }; },
     chrome: {
       runtime: { lastError: null, onMessage: { addListener(value) { listener = value; } } },
-      storage: { local: { get(key, callback) { callback({ [key]: data[key] }); } } },
+      storage: {
+        local: { get(key, callback) { callback({ [key]: data[key] }); }, set(value, callback) { Object.assign(data, value); callback?.(); } },
+        session: { get(key, callback) { callback({ [key]: sessionData[key] }); }, set(value, callback) { Object.assign(sessionData, value); callback?.(); } }
+      },
       notifications: { create(id, options, callback) { notifications.push({ id, options }); callback(id); } }
     }
   };
   context.globalThis = context;
   context.importScripts = () => vm.runInNewContext(notificationSource, context);
   vm.runInNewContext(backgroundSource, context);
-  const send = (message) => new Promise((resolve) => listener(message, { tab: { id: 1 } }, resolve));
-  return { send, notifications, requests };
+  const send = (message, tabId = 1) => new Promise((resolve) => listener(message, { tab: { id: tabId } }, resolve));
+  return { send, notifications, requests, sessionData, data };
 }
 
 test("浏览器通知只包含截断后的问题摘要", async () => {
@@ -39,6 +43,19 @@ test("浏览器通知只包含截断后的问题摘要", async () => {
   assert.equal(h.notifications[0].options.title, "ChatGPT 回复完成");
   assert.equal(h.notifications[0].options.message.endsWith("…"), true);
   assert.equal(h.requests.length, 0);
+});
+
+test("请求计时按会话 URL 保存，换标签页重新打开仍可读取和清除", async () => {
+  const h = setup({ enabled: false, provider: "browser" });
+  const state = { requestId: "request-one", site: "chatgpt.com", startedAt: Date.now(), path: "/c/one", known: ["old"], knownErrors: [], sawReply: false };
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_SAVE", state }, 1)).ok, true);
+  const loaded = await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/c/one" }, 99);
+  assert.equal(loaded.state.path, "/c/one");
+  assert.equal(loaded.state.requestId, "request-one");
+  assert.deepEqual(loaded.state.known, ["old"]);
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/c/two" }, 99)).state, null);
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_CLEAR", requestId: "request-one" }, 99)).ok, true);
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/c/one" }, 1)).state, null);
 });
 
 test("第三方通知由后台发送且未开启时不会发送", async () => {

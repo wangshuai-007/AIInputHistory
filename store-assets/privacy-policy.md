@@ -20,7 +20,7 @@ AI 输入历史是一款以浏览器本地存储为默认方式的扩展，用�
 
 ### 数据用途、存储与通知
 
-历史、草稿和设置保存在 `chrome.storage.local`。扩展没有开发者运营的服务器，不会把这些数据发送给开发者，也不会用于广告、画像、分析、出售或信用评估。
+历史、草稿和设置保存在 `chrome.storage.local`。为支持 F5、关闭标签页后重新打开同一 ChatGPT 会话 URL，以及重启浏览器后在 30 分钟有效期内恢复计时，进行中的计时状态也会临时保存在 `chrome.storage.local`，并按会话 URL（域名 + pathname）匹配；完成、取消、失败、超时或过期后会被清除。扩展没有开发者运营的服务器，不会把这些数据发送给开发者，也不会用于广告、画像、分析、出售或信用评估。
 
 回复完成通知默认关闭。仅当用户主动启用第三方推送、企业群机器人或自定义 HTTP 通知时，扩展才会向用户选择的通知服务发送通知请求。内置通知默认只发送“ChatGPT 回复完成”和问题前 32 个字符的摘要；纯图片或附件请求发送通用提示，不发送 GPT 回复正文。
 自定义 HTTP 请求允许用户在模板中显式使用 `{{question}}`、`{{pageUrl}}`、`{{duration}}` 等变量；使用这些变量意味着相应完整问题、页面地址或计时信息会被发送到用户配置的目标服务。Webhook、Token 等凭据仅保存在扩展本地，并只用于对应通知请求。
@@ -61,7 +61,7 @@ The extension may handle chat input text, site domain and page title, drafts and
 
 ### Purpose, storage, and notifications
 
-History, drafts, and settings are stored in `chrome.storage.local`. The extension has no developer-operated server and does not send this data to the developer or use it for advertising, profiling, analytics, sale, or credit decisions.
+History, drafts, and settings are stored in `chrome.storage.local`. To continue an in-progress ChatGPT timer after F5, after closing and reopening the same conversation URL, or after restarting the browser within the 30-minute validity window, transient active-timing state is also stored in `chrome.storage.local` and matched by conversation URL (host + pathname). It is cleared on completion, cancellation, failure, timeout, or expiry. The extension has no developer-operated server and does not send this data to the developer or use it for advertising, profiling, analytics, sale, or credit decisions.
 
 Completion notifications are off by default. Only when the user explicitly enables a third-party push provider, group robot, or custom HTTP notification does the extension send a notification request to the service selected by the user. Built-in providers send the completion title and, by default, only the first 32 characters of the prompt. Image-only or attachment-only requests use a generic message. GPT reply bodies are not sent.
 

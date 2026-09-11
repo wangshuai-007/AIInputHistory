@@ -5,21 +5,30 @@ if (new URLSearchParams(location.search).has("timing")) {
   finish.type = "button";
   document.querySelector(".top").appendChild(finish);
   let turn;
-  let requestIndex = 0;
+  let requestIndex = Number(localStorage.getItem("aih-fixture-request-index") || 0);
+  function renderRequest(state) {
+    if (!state) return;
+    turn = document.createElement("article");
+    turn.innerHTML = `<div data-message-author-role="assistant" data-message-id="test-reply-${state.id}">${state.complete ? "示例回复已完成" : "正在生成示例回复……"}</div>${state.complete ? '<button data-testid="copy-turn-action-button" type="button">复制回复</button>' : '<button data-testid="stop-button" type="button">停止生成</button>'}`;
+    document.querySelector(".thread").appendChild(turn);
+    turn.querySelector('[data-testid="stop-button"]')?.addEventListener("click", () => turn.querySelector('[data-testid="stop-button"]')?.remove());
+  }
+  renderRequest(JSON.parse(localStorage.getItem("aih-fixture-request") || "null"));
   document.querySelector(".send").addEventListener("click", () => {
     document.querySelector(".composer").value = "";
-    turn = document.createElement("article");
+    turn?.remove();
     requestIndex += 1;
-    turn.innerHTML = `<div data-message-author-role="assistant" data-message-id="test-reply-${requestIndex}">正在生成示例回复……</div><button data-testid="stop-button" type="button">停止生成</button>`;
-    document.querySelector(".thread").appendChild(turn);
-    turn.querySelector("button").addEventListener("click", () => turn.querySelector("button")?.remove());
+    localStorage.setItem("aih-fixture-request-index", String(requestIndex));
+    const state = { id: requestIndex, complete: false };
+    localStorage.setItem("aih-fixture-request", JSON.stringify(state));
+    renderRequest(state);
   });
   finish.addEventListener("click", () => {
     if (!turn) return;
+    const state = JSON.parse(localStorage.getItem("aih-fixture-request") || "null");
+    if (!state) return;
+    state.complete = true;
+    localStorage.setItem("aih-fixture-request", JSON.stringify(state));
     turn.querySelector('[data-testid="stop-button"]')?.remove();
-    const copy = document.createElement("button");
-    copy.dataset.testid = "copy-turn-action-button";
-    copy.textContent = "复制回复";
-    turn.appendChild(copy);
   });
 }

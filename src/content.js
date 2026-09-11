@@ -26,12 +26,21 @@
     (text) => { if (activeInput) adapter.setText(activeInput, text); },
     () => historyNavigator.reset()
   );
+  const timingSession = {
+    save: (state) => timingSessionMessage("AIH_TIMING_SESSION_SAVE", { state }),
+    load: async () => (await timingSessionMessage("AIH_TIMING_SESSION_LOAD", { site: location.hostname, path: location.pathname })).state,
+    clear: (state) => timingSessionMessage("AIH_TIMING_SESSION_CLEAR", {
+      requestId: state?.requestId || "", site: state?.site || location.hostname, path: state?.path || location.pathname
+    })
+  };
   const requestTiming = new namespace.RequestTiming({
     store,
     onTick: (elapsed) => panel.timingView.update(liveSettings.trackRequestTime ? elapsed : null),
-    onComplete: notifyRequestCompleted
+    onComplete: notifyRequestCompleted,
+    session: timingSession
   });
   requestTiming.setEnabled(settings.trackRequestTime || settings.completionNotification?.enabled === true);
+  await requestTiming.restore(location.hostname);
   namespace.captureSiteIcon(store, location.hostname).then(async (dataUrl) => {
     if (!dataUrl) return;
     namespace.SiteProfiles.setSiteIcons(await store.getSiteIcons());
@@ -72,7 +81,6 @@
   document.addEventListener("click", handleSendControl, true);
   window.addEventListener("scroll", () => panel.reposition(), true);
   window.addEventListener("resize", () => panel.reposition());
-  window.addEventListener("pagehide", () => requestTiming.finish("cancelled"));
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") recordSnapshot();
   });
@@ -146,10 +154,28 @@
     });
   }
 
+  function timingSessionMessage(type, extra = {}) {
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ type, ...extra }, (response) => {
+        const error = chrome.runtime.lastError;
+        if (error) { reject(error); return; }
+        if (!response?.ok) { reject(new Error(response?.error || "请求计时会话操作失败")); return; }
+        resolve(response);
+      });
+    });
+  }
+
   function notifyRequestCompleted(result) {
     if (liveSettings.completionNotification?.enabled !== true) return;
     try {
-      chrome.runtime.sendMessage({ type: "AIH_REQUEST_COMPLETED", event: result }, () => void chrome.runtime.lastError);
+      chrome.runtime.sendMessage({ type: "AIH_REQUEST_COMPLETED", event: result }, (response) => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          console.warn("[AI 输入历史] 发送完成通知失败", error.message || error);
+          return;
+        }
+        if (!response?.ok) console.warn("[AI 输入历史] 发送完成通知失败", response?.error || "后台通知失败");
+      });
     } catch (error) {
       console.warn("[AI 输入历史] 发送完成通知失败", error);
     }
