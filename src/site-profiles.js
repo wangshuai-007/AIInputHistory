@@ -9,7 +9,13 @@
     profile("grok", "Grok", ["grok.com"]),
     profile("glm", "GLM", ["chat.z.ai", "z.ai", "chatglm.cn"]),
     profile("qwen", "Qwen", ["chat.qwen.ai", "qwen.ai", "qianwen.com", "tongyi.aliyun.com"]),
-    profile("chatgpt", "ChatGPT", ["chatgpt.com", "chat.openai.com"]),
+    profile(
+      "chatgpt",
+      "ChatGPT",
+      ["chatgpt.com", "chat.openai.com"],
+      ["#prompt-textarea", "textarea[name='prompt-textarea']"],
+      ["#composer-submit-button", "button[data-testid*='send-button']", "button.composer-submit-btn", "button[aria-label='Send prompt']"]
+    ),
     profile("claude", "Claude", ["claude.ai"]),
     profile("aistudio", "Google AI Studio", ["aistudio.google.com"]),
     profile("deepseek", "DeepSeek", ["chat.deepseek.com"]),

@@ -122,6 +122,19 @@ test('回复底部操作按钮缺失时，停止生成结束且发送按钮恢�
   assert.equal(h.writes[0].completedAt, 6000);
 });
 
+test('超快回复未采到生成中、发送按钮和底部操作按钮时，回复稳定后仍能判定完成', () => {
+  const h = setup(); h.tracker.attach(h.start(), 'entry');
+  h.sample = { ...h.sample, busy: false, ready: false, replies: [{ key: 'new', nonempty: true, complete: false, activity: '5:2' }] };
+  h.now = 2000; h.tracker.tick();
+  h.now = 2900; h.sample.replies[0].activity = '8:2'; h.tracker.tick();
+  h.now = 4000; h.tracker.tick();
+  assert.equal(h.writes.length, 0, '内容最后变化后不足 1250ms 不应提前完成');
+  h.now = 4150; h.tracker.tick();
+  assert.equal(h.writes.length, 1);
+  assert.equal(h.writes[0].status, 'completed');
+  assert.equal(h.writes[0].completedAt, 2900);
+});
+
 test('只有确认回复完成才触发完成回调并保留问题上下文', () => {
   const h = setup();
   const completed = [];

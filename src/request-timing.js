@@ -37,7 +37,7 @@
         site, startedAt: observation.startedAt, path: observation.baseline.path,
         known: new Set(observation.baseline.replies.map((reply) => reply.key)),
         knownErrors: new Set(observation.baseline.errors || []), sawReply: false, sawBusy: observation.baseline.busy === true,
-        quietSince: null, entryId: null, result: null,
+        quietSince: null, replyActivity: null, entryId: null, result: null,
         completionContext: { ...completionContext }
       };
       this.active = request;
@@ -75,7 +75,7 @@
         known: new Set(Array.isArray(saved.known) ? saved.known : []),
         knownErrors: new Set(Array.isArray(saved.knownErrors) ? saved.knownErrors : []),
         sawReply: saved.sawReply === true, sawBusy: saved.sawBusy === true,
-        quietSince: null, entryId: saved.entryId || null, result: null,
+        quietSince: null, replyActivity: null, entryId: saved.entryId || null, result: null,
         adoptedPath: saved.adoptedPath === true || saved.path !== current.path,
         completionContext: saved.completionContext && typeof saved.completionContext === "object" ? { ...saved.completionContext } : {}
       };
@@ -122,11 +122,18 @@
       request.sawReply ||= replies.some((reply) => reply.nonempty);
       request.sawBusy ||= state.busy === true;
       if ((!sawReplyBefore && request.sawReply) || (!sawBusyBefore && request.sawBusy)) this.persistSession(request);
-      const completionSignal = state.ready === true || request.sawBusy || replies.some((reply) => reply.complete);
-      const finished = !state.busy && request.sawReply && completionSignal;
-      if (!finished) { request.quietSince = null; return; }
-      request.quietSince ??= this.now();
-      if (this.now() - request.quietSince >= 500) this.finish("completed", request.quietSince);
+      const replyActivity = replies.filter((reply) => reply.nonempty)
+        .map((reply) => `${reply.key}:${reply.activity || ""}`).join("|");
+      if (replyActivity && replyActivity !== request.replyActivity) {
+        request.replyActivity = replyActivity;
+        request.quietSince = this.now();
+      }
+      if (state.busy) { request.quietSince = null; return; }
+      if (replyActivity && request.quietSince == null) request.quietSince = this.now();
+      if (!request.sawReply || !request.quietSince) return;
+      const strongCompletionSignal = state.ready === true || request.sawBusy || replies.some((reply) => reply.complete);
+      const stableFor = this.now() - request.quietSince;
+      if (stableFor >= (strongCompletionSignal ? 500 : 1250)) this.finish("completed", request.quietSince);
     }
 
     safeTick() {
@@ -187,7 +194,9 @@
       const ordinal = assistantNodes.indexOf(node);
       const key = node.getAttribute("data-message-id") || turn.getAttribute?.("data-testid") || `assistant-index:${ordinal}`;
       const complete = [...turn.querySelectorAll('[data-testid="copy-turn-action-button"],[data-testid="good-response-turn-action-button"],[data-testid="bad-response-turn-action-button"]')].some(visible);
-      return { key, nonempty: Boolean(node.textContent.trim()), complete };
+      const text = node.textContent.trim();
+      const activity = `${text.length}:${turn.querySelectorAll("*").length}`;
+      return { key, nonempty: Boolean(text), complete, activity };
     });
     const errors = [...scope.querySelectorAll('[data-testid="conversation-turn-error"]')].filter(visible)
       .map((node, index) => node.getAttribute("data-message-id") || node.closest('[data-testid^="conversation-turn-"]')?.getAttribute("data-testid") || `error-index:${index}`);

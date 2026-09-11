@@ -37,7 +37,7 @@ await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const webPort = server.address().port;
 const debugPort = await freePort();
 const profile = path.join(os.tmpdir(), `aih-browser-${process.pid}-${Date.now()}`);
-const targetUrl = `http://127.0.0.1:${webPort}/store-assets/screenshot-fixture.html?lang=zh-CN&timing=1`;
+const targetUrl = `http://127.0.0.1:${webPort}/store-assets/screenshot-fixture.html?lang=zh-CN&timing=1&notify=1`;
 const browser = spawn(chromePath, [
   "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
   `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, "about:blank"
@@ -96,7 +96,16 @@ try {
   await send("Page.navigate", { url: targetUrl });
   await waitFor(`location.href.includes("screenshot-fixture.html") && Boolean(document.querySelector("[data-ai-input-history='root']")?.shadowRoot?.querySelector(".launcher"))`);
   await sleep(700);
-  await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history='root']").shadowRoot; if(root.querySelector(".panel").classList.contains("hidden")) root.querySelector(".launcher").click(); const c=document.querySelector(".composer"); c.value="计时验收"; c.dispatchEvent(new Event("input",{bubbles:true})); document.querySelector(".send").click(); return true})()`);
+  const caretRules = await evaluate(`(async()=>{const c=document.querySelector(".composer"); c.style.width="120px"; c.value="这是一段没有换行符但是长度足够触发编辑框自动折行的测试文字用于验证视觉行判断"; c.setSelectionRange(18,18); const wrapped={up:AIInputHistory.InputAdapter.canMoveVertically(c,"up"),down:AIInputHistory.InputAdapter.canMoveVertically(c,"down")}; c.style.width="100%"; c.value="第一行\\n第二行\\n第三行"; c.setSelectionRange(6,6); const middle={up:AIInputHistory.InputAdapter.canMoveVertically(c,"up"),down:AIInputHistory.InputAdapter.canMoveVertically(c,"down")}; const rich=document.createElement("div"); rich.contentEditable="true"; rich.setAttribute("role","textbox"); rich.style.cssText="position:fixed;left:-10000px;top:0;width:120px;white-space:pre-wrap"; rich.textContent="第一行内容\\n第二行内容\\n第三行内容"; document.body.appendChild(rich); rich.focus(); const text=rich.firstChild; const selection=getSelection(); const range=document.createRange(); range.setStart(text,8); range.collapse(true); selection.removeAllRanges(); selection.addRange(range); const richMiddle={up:AIInputHistory.InputAdapter.canMoveVertically(rich,"up"),down:AIInputHistory.InputAdapter.canMoveVertically(rich,"down")}; rich.remove(); c.focus(); c.setSelectionRange(6,6); let leaked=0; document.addEventListener("keydown",(event)=>{if(event.key==="ArrowUp")leaked+=1},{capture:true,once:true}); c.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowUp",bubbles:true,cancelable:true})); await new Promise((resolve)=>setTimeout(resolve,80)); const middleText=c.value; c.setSelectionRange(0,0); const firstUp=AIInputHistory.InputAdapter.canMoveVertically(c,"up"); c.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowUp",bubbles:true,cancelable:true})); await new Promise((resolve)=>setTimeout(resolve,80)); return {wrapped,middle,richMiddle,firstUp,leaked,middleText,historyText:c.value}})()`);
+  assert.deepEqual(caretRules.wrapped, { up: true, down: true }, "textarea 自动折行也应按视觉行判断上下边界");
+  assert.deepEqual(caretRules.middle, { up: true, down: true }, "多行输入中间行应保留上下行移动");
+  assert.deepEqual(caretRules.richMiddle, { up: true, down: true }, "contenteditable/ProseMirror 类输入框中间行也应保留上下行移动");
+  assert.equal(caretRules.firstUp, false, "第一行不能再向上移动时才允许切历史");
+  assert.equal(caretRules.middleText, "第一行\n第二行\n第三行", "中间行 ArrowUp 不得切换历史");
+  assert.equal(caretRules.leaked, 0, "方向键不能继续传播给页面自己的快捷键处理器");
+  assert.notEqual(caretRules.historyText, caretRules.middleText, "第一行 ArrowUp 应切换到历史记录");
+  await evaluate(`(()=>{const c=document.querySelector(".composer"); c.value="计时验收"; c.dispatchEvent(new Event("input",{bubbles:true})); return true})()`);
+  await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history='root']").shadowRoot; if(root.querySelector(".panel").classList.contains("hidden")) root.querySelector(".launcher").click(); document.querySelector(".send").click(); return true})()`);
   await sleep(1200);
   const running = await evaluate(`(()=>{const l=document.querySelector("[data-ai-input-history='root']").shadowRoot.querySelector(".launcher"); return {active:l.classList.contains("timing-active"),clock:l.querySelector(".request-clock").textContent}})()`);
   assert.equal(running.active, true, `发送后悬浮按钮应进入计时状态；页面状态=${JSON.stringify(await evaluate(`({settings:__testMemory.aiInputHistorySettings,entries:__testMemory.aiInputHistoryState.entries.slice(0,5),profile:AIInputHistory.SiteProfiles.forSite(location.hostname)?.id||null,sample:AIInputHistory.requestTimingModel.sampleChatGPT()})`))}；浏览器事件=${JSON.stringify(browserEvents.slice(-8))}`);
@@ -122,6 +131,16 @@ try {
   assert.match(finalState.timingText, /总耗时/, "历史行应显示总耗时");
   assert.match(finalState.timingText, /回复完成/, "历史行应显示 GPT 回复完成时间");
   assert.match(finalState.preciseTime, /\d{1,2}:\d{2}:\d{2}/, "历史行应保留精确到秒的发送时间");
+  const notificationsAfterText = await evaluate(`__testNotificationMessages.map((item)=>item.event?.promptText)`);
+  assert.deepEqual(notificationsAfterText, ["计时验收"], "真实回复完成应向后台发送一次完成通知事件");
+
+  await evaluate(`(()=>{const c=document.querySelector(".composer"); const send=document.querySelector(".send"); c.value="hello"; c.dispatchEvent(new Event("input",{bubbles:true})); send.click(); document.querySelector('[data-testid="stop-button"]')?.remove(); send.disabled=true; return true})()`);
+  await sleep(2200);
+  const fastReply = await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history='root']").shadowRoot; const entry=__testMemory.aiInputHistoryState.entries.find((item)=>item.text==="hello"); return {timing:entry?.requestTiming||null,launcherActive:root.querySelector(".launcher").classList.contains("timing-active"),notifications:__testNotificationMessages.map((item)=>item.event?.promptText),sample:AIInputHistory.requestTimingModel.sampleChatGPT(),sessions:JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}")}})()`);
+  assert.equal(fastReply.timing?.status, "completed", `超快回复即使未采到 stop/send/action 信号也应完成计时；状态=${JSON.stringify(fastReply)}`);
+  assert.equal(fastReply.launcherActive, false, "超快回复稳定后应结束计时");
+  assert.deepEqual(fastReply.notifications, ["计时验收", "hello"], "超快回复完成后也必须发出完成通知事件");
+  await evaluate(`(document.querySelector(".send").disabled=false,true)`);
 
   const historyCount = await evaluate(`__testMemory.aiInputHistoryState.entries.length`);
   await evaluate(`(()=>{const c=document.querySelector(".composer"); c.value=""; c.dispatchEvent(new Event("input",{bubbles:true})); document.querySelector(".send").click(); return true})()`);

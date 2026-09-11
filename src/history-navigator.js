@@ -14,6 +14,7 @@
       this.original = "";
       this.applying = false;
       this.loading = null;
+      this.interrupted = false;
       this.loadRevision = (this.loadRevision || 0) + 1;
     }
 
@@ -21,9 +22,26 @@
       return this.applying;
     }
 
+    isBrowsing() {
+      return Boolean(this.entries || this.loading || this.index >= 0);
+    }
+
+    canMove() {
+      return this.interrupted !== true;
+    }
+
+    interrupt() {
+      if (this.interrupted) return true;
+      if (!this.isBrowsing()) return false;
+      this.interrupted = true;
+      this.loadRevision += 1;
+      this.loading = null;
+      return true;
+    }
+
     /** Moves backward or forward through site history and restores the original text at the newest edge. */
     async move(direction, input, context) {
-      if (!input || !context || !["up", "down"].includes(direction)) return false;
+      if (!input || !context || !["up", "down"].includes(direction) || !this.canMove()) return false;
       const revision = this.loadRevision;
       if (!this.entries) {
         this.loading ||= this.load(input, context);

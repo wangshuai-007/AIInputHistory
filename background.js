@@ -36,8 +36,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       promptText: "这是一条 ChatGPT 回复完成测试通知",
       durationMs: 3200, completedAt: Date.now(), pageUrl: "https://chatgpt.com/"
     } : message.event;
-    deliverConfiguredNotification(event, message.type === "AIH_NOTIFICATION_TEST")
-      .then((result) => sendResponse({ ok: true, ...result }))
+    deliverConfiguredNotification(event)
+      .then((result) => {
+        if (result?.skipped) throw new Error("完成通知尚未开启或设置尚未保存");
+        sendResponse({ ok: true, ...result });
+      })
       .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
     return true;
   }

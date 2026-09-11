@@ -9,7 +9,7 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 async function setup() {
   const h = {
-    handlers: new Map(), timers: new Map(), intervals: new Map(), operations: [], warnings: [],
+    handlers: new Map(), windowHandlers: new Map(), timers: new Map(), intervals: new Map(), operations: [], warnings: [],
     composer: { id: "first", text: "旧草稿", isConnected: true, focus() {} },
     settings: { launcherEnabled: true, snapshotSeconds: 60, language: "zh-CN", customDomains: [] },
     nextId: 1, intervalStarts: 0
@@ -50,7 +50,7 @@ async function setup() {
     globalThis: {}, console: { warn: (...args) => h.warnings.push(args) },
     location: { hostname: "chatgpt.com" },
     document: { title: "测试", addEventListener: (name, callback) => h.handlers.set(name, callback) },
-    window: { addEventListener() {} },
+    window: { addEventListener(name, callback) { h.windowHandlers.set(name, callback); } },
     setTimeout(callback, delay) { const id = h.nextId++; h.timers.set(id, { callback, delay }); return id; },
     clearTimeout: (id) => h.timers.delete(id),
     setInterval(callback, delay) { const id = h.nextId++; h.intervalStarts += 1; h.intervals.set(id, { callback, delay }); return id; },
@@ -67,21 +67,41 @@ async function setup() {
     historyModel: { sanitizeSettings: (settings) => settings, matchesShortcut: () => false },
     InputAdapter: {
       findComposer: () => h.composer, fieldKey: (input) => input.id, getText: (input) => input.text,
-      resolveEventEditable: (event) => event.editable, isEditable: (input) => Boolean(input), composerScore: () => 10
+      resolveEventEditable: (event) => event.editable, isEditable: (input) => Boolean(input), composerScore: () => 10,
+      canMoveVertically: () => Boolean(h.caretCanMove)
     },
-    HistoryNavigator: class { reset() {} isApplying() { return false; } async move() {} },
+    HistoryNavigator: class {
+      constructor() { h.historyNavigator = this; this.reset(); this.moves = 0; this.interrupts = 0; }
+      reset() { this.browsing = false; this.blocked = false; }
+      isApplying() { return false; }
+      isBrowsing() { return this.browsing; }
+      canMove() { return !this.blocked; }
+      interrupt() {
+        if (!this.browsing && !this.blocked) return false;
+        this.blocked = true;
+        this.interrupts += 1;
+        return true;
+      }
+      async move() { if (this.blocked) return false; this.browsing = true; this.moves += 1; return true; }
+    },
     SendDetector: class {
       constructor(adapter, onSend) { this.onSend = onSend; }
       handleSubmit(event, input, context) { this.onSend(input.text, context); }
+      handlePointerDown() {}
+      watchEnter() {}
+      cancelEnter() {}
     }
   };
   await vm.runInNewContext(source, context);
   h.event = (name, overrides = {}) => {
     const event = {
       editable: h.composer, target: h.composer, composedPath: () => [h.composer],
-      preventDefault() { this.defaultPrevented = true; }, ...overrides
+      preventDefault() { this.defaultPrevented = true; },
+      stopImmediatePropagation() { this.propagationStopped = true; },
+      ...overrides
     };
-    h.handlers.get(name)(event);
+    if (name === "keydown") h.windowHandlers.get(name)?.(event);
+    if (!event.propagationStopped) h.handlers.get(name)(event);
     return event;
   };
   h.snapshot = () => [...h.intervals.values()][0].callback();
@@ -144,6 +164,63 @@ test("旧快照、发送与下一条草稿串行保存，不会把已发送内�
   assert.notEqual(h.operations[2].context.sessionId, h.operations[4].context.sessionId);
 });
 
+test("上下键只在光标到达首尾行边界时切换历史", async () => {
+  const h = await setup();
+  h.caretCanMove = true;
+  const within = h.event("keydown", { key: "ArrowUp" });
+  assert.equal(within.defaultPrevented, undefined, "还能上一行时应保留编辑框原生移动");
+  assert.equal(within.propagationStopped, true, "仍需隔离页面自己的 ArrowUp 快捷键");
+  assert.equal(h.historyNavigator.moves, 0);
+
+  h.caretCanMove = false;
+  const boundary = h.event("keydown", { key: "ArrowUp" });
+  assert.equal(boundary.defaultPrevented, true, "已在第一行时才接管 ArrowUp");
+  assert.equal(h.historyNavigator.moves, 1);
+
+  h.historyNavigator.reset();
+  h.historyNavigator.moves = 0;
+  h.caretCanMove = true;
+  const withinDown = h.event("keydown", { key: "ArrowDown" });
+  assert.equal(withinDown.defaultPrevented, undefined, "还能下一行时应保留编辑框原生移动");
+  assert.equal(h.historyNavigator.moves, 0);
+  h.caretCanMove = false;
+  const boundaryDown = h.event("keydown", { key: "ArrowDown" });
+  assert.equal(boundaryDown.defaultPrevented, true, "已在最后一行时才接管 ArrowDown");
+  assert.equal(h.historyNavigator.moves, 1);
+});
+
+test("历史轮换后手动编辑文本会把上下键交还给输入框", async () => {
+  const h = await setup();
+  const first = h.event("keydown", { key: "ArrowUp" });
+  assert.equal(first.defaultPrevented, true);
+  assert.equal(first.propagationStopped, true, "历史切换时不能让同一个方向键继续交给页面处理");
+  assert.equal(h.historyNavigator.moves, 1);
+
+  h.composer.text = "编辑过的历史内容";
+  h.event("input");
+  assert.equal(h.historyNavigator.canMove(), false);
+  const next = h.event("keydown", { key: "ArrowUp" });
+  assert.equal(next.defaultPrevented, undefined, "中断后要保留浏览器原生光标上下移动");
+  assert.equal(next.propagationStopped, true, "中断后仍不能让方向键泄漏给 ChatGPT 快捷键处理");
+  assert.equal(h.historyNavigator.moves, 1);
+});
+
+test("历史轮换后键盘或鼠标移动光标会恢复原生上下行移动", async () => {
+  for (const moveCaret of [
+    (h) => h.event("keydown", { key: "ArrowLeft" }),
+    (h) => h.event("pointerdown", { composedPath: () => [h.composer] })
+  ]) {
+    const h = await setup();
+    h.event("keydown", { key: "ArrowUp" });
+    moveCaret(h);
+    assert.equal(h.historyNavigator.canMove(), false);
+    const next = h.event("keydown", { key: "ArrowDown" });
+    assert.equal(next.defaultPrevented, undefined);
+    assert.equal(next.propagationStopped, true);
+    assert.equal(h.historyNavigator.moves, 1);
+  }
+});
+
 test("闭合 Shadow DOM 中关闭、清空、固定和过滤按钮保留原生 Enter", async () => {
   const h = await setup();
   h.panel.opened = true;
@@ -172,14 +249,14 @@ test("搜索框仍支持上下选择及 Enter 插入", async () => {
   const h = await setup();
   h.panel.opened = true;
   h.panel.shadow.activeElement = h.panel.search;
-  const event = h.event("keydown", { key: "ArrowDown", composedPath: () => [h.panel.host] });
-  h.event("keydown", { key: "Enter", composedPath: () => [h.panel.host] });
+  const event = h.event("keydown", { key: "ArrowDown", editable: null, composedPath: () => [h.panel.host] });
+  h.event("keydown", { key: "Enter", editable: null, composedPath: () => [h.panel.host] });
   assert.equal(event.defaultPrevented, true);
   assert.equal(h.panel.moves, 1);
   assert.equal(h.panel.selected, 1);
 });
 
-test("浏览器验收页加载请求计时依赖，且顺序早于面板和内容脚本", () => {
+test("浏览器验收页加载请求计时依赖，且方向键守卫从 document_start 注册", () => {
   for (const name of ["browser-fixture.html", "chatgpt-error-fixture.html"]) {
     const html = fs.readFileSync(path.join(__dirname, name), "utf8");
     const timing = html.indexOf("../src/request-timing.js");
@@ -189,4 +266,6 @@ test("浏览器验收页加载请求计时依赖，且顺序早于面板和内�
     assert.ok(timing >= 0 && timingView > timing, name);
     assert.ok(panel > timingView && content > panel, name);
   }
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "manifest.json"), "utf8"));
+  assert.equal(manifest.content_scripts[0].run_at, "document_start");
 });
