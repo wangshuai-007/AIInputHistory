@@ -21,7 +21,6 @@
     </section>
     <section class="settings">
       <h2 data-i18n="settings.title">记录设置</h2>
-      <div class="setting-row"><span><span data-i18n="timing.setting">跟踪请求耗时</span><small data-i18n="timing.hint">仅 ChatGPT：从发送到回复完成，默认关闭</small></span><label class="switch"><input id="trackRequestTime" type="checkbox" data-i18n-aria-label="timing.setting"><span aria-hidden="true"></span></label></div>
       <label><span><span data-i18n="settings.historyLimit">历史上限</span><small data-i18n="settings.historyLimitHint">最近输入，按时间倒序</small></span><input id="historyLimit" type="number" min="20" max="500" step="10"></label>
       <label><span><span data-i18n="settings.sendLimit">发送记录上限</span><small data-i18n="settings.sendLimitHint">确认实际发送前的内容</small></span><input id="sendLimit" type="number" min="1" max="50"></label>
       <label><span><span data-i18n="settings.snapshot">自动快照间隔</span><small data-i18n="settings.snapshotHint">单位：秒，范围 1–3600</small></span><input id="snapshotSeconds" type="number" min="1" max="3600" step="1"></label>
@@ -35,9 +34,13 @@
         <small class="shortcut-help" data-i18n="shortcut.help">组合键需包含 Ctrl、Alt、Shift 或 Windows/Command；也可单独使用 F1–F12。按 Esc 取消录制。</small>
       </div>
     </section>
-    <section class="notifications">
-      <h2 data-i18n="notify.title">回复完成通知</h2>
-      <div class="setting-row"><span><span data-i18n="notify.enable">完成后发送通知</span><small data-i18n="notify.hint">ChatGPT 回复完成后通知；默认内容为问题前 32 个字</small></span><label class="switch"><input id="notifyEnabled" type="checkbox"><span aria-hidden="true"></span></label></div>
+    <section class="chatgpt-settings">
+      <div class="chatgpt-settings-head"><h2 data-i18n="chatgpt.title">ChatGPT 专属设置</h2><p data-i18n="chatgpt.hint">以下功能仅用于 ChatGPT 对话。</p></div>
+      <div class="chatgpt-settings-body">
+        <div class="setting-row"><span><span data-i18n="timing.setting">跟踪请求耗时</span><small data-i18n="timing.hint">从发送到回复完成，默认关闭</small></span><label class="switch"><input id="trackRequestTime" type="checkbox" data-i18n-aria-label="timing.setting"><span aria-hidden="true"></span></label></div>
+        <div class="notifications">
+          <h3 data-i18n="notify.title">回复完成通知</h3>
+          <div class="setting-row"><span><span data-i18n="notify.enable">完成后发送通知</span><small data-i18n="notify.hint">回复完成后通知；默认内容为问题前 32 个字</small></span><label class="switch"><input id="notifyEnabled" type="checkbox"><span aria-hidden="true"></span></label></div>
       <label class="notify-row"><span data-i18n="notify.provider">通知方式</span><select id="notifyProvider"><option value="browser" data-i18n="notify.browser">浏览器通知</option><option value="bark">Bark</option><option value="serverchan">Server酱</option><option value="pushplus">PushPlus</option><option value="ntfy">ntfy</option><option value="gotify">Gotify</option><option value="dingtalk" data-i18n="notify.dingtalk">钉钉机器人</option><option value="feishu" data-i18n="notify.feishu">飞书机器人</option><option value="wecom" data-i18n="notify.wecom">企业微信机器人</option><option value="custom" data-i18n="notify.custom">自定义请求</option></select></label>
       <div id="notificationConfig" class="notification-config">
         <div data-notify-provider="browser"><p data-i18n="notify.browserHint">使用 Windows/macOS 浏览器系统通知，不发送到第三方。</p></div>
@@ -50,8 +53,10 @@
         <div data-notify-provider="feishu"><label class="notify-multiline"><span>Webhook URL</span><textarea id="notifyFeishuWebhook" rows="3" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."></textarea></label><small class="notify-template-help" data-i18n="notify.robotHint">直接粘贴群机器人完整 Webhook 地址。</small></div>
         <div data-notify-provider="wecom"><label class="notify-multiline"><span>Webhook URL</span><textarea id="notifyWecomWebhook" rows="3" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."></textarea></label><small class="notify-template-help" data-i18n="notify.robotHint">直接粘贴群机器人完整 Webhook 地址。</small></div>
         <div data-notify-provider="custom"><label><span data-i18n="notify.method">请求方法</span><select id="notifyCustomMethod"><option>POST</option><option>GET</option><option>PUT</option><option>PATCH</option></select></label><label><span>URL</span><input id="notifyCustomUrl" type="url" placeholder="https://example.com/push"></label><label class="notify-multiline"><span>Headers JSON</span><textarea id="notifyCustomHeaders" rows="3"></textarea></label><label class="notify-multiline"><span>Body</span><textarea id="notifyCustomBody" rows="4"></textarea></label><small class="notify-template-help" data-i18n="notify.variables">模板变量：{{title}}、{{message}}、{{question}}、{{duration}}、{{completedAt}}、{{pageUrl}}</small></div>
+          </div>
+          <div class="notify-actions"><button id="testNotification" type="button" data-i18n="notify.test">发送测试通知</button></div>
+        </div>
       </div>
-      <div class="notify-actions"><button id="testNotification" type="button" data-i18n="notify.test">发送测试通知</button></div>
     </section>
     <section class="domains">
       <h2 data-i18n="domains.title">自定义追踪域名</h2>

@@ -48,7 +48,14 @@ input:focus-visible,button:focus-visible { outline:2px solid var(--accent); outl
 .key-plus { color:var(--muted); font-size:10px; }
 .shortcut-placeholder { color:var(--muted); font-size:10px; }
 .shortcut-help { line-height:1.45; }
-.notifications { border-top:1px solid var(--line); margin-top:14px; }
+.chatgpt-settings { margin-top:18px; border:1px solid color-mix(in srgb,var(--accent) 42%,var(--line)); border-radius:14px; background:color-mix(in srgb,var(--accent) 4%,var(--surface)); overflow:hidden; }
+.chatgpt-settings-head { padding:12px 13px 10px; border-bottom:1px solid color-mix(in srgb,var(--accent) 25%,var(--line)); background:color-mix(in srgb,var(--accent) 7%,var(--surface)); }
+.chatgpt-settings-head h2 { margin:0 0 4px; color:var(--accent); }
+.chatgpt-settings-head p { font-size:10px; line-height:1.45; }
+.chatgpt-settings-body { padding:0 12px 12px; }
+.chatgpt-settings-body>.setting-row { border-bottom:0; }
+.notifications { border-top:1px solid var(--line); margin-top:0; }
+.notifications h3 { margin:12px 0 0; color:var(--text); font-size:11px; font-weight:650; letter-spacing:.02em; }
 .notify-row select,.notification-config input,.notification-config select,.notification-config textarea { border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--text); font:inherit; }
 .notify-row select { width:138px; height:34px; padding:0 8px; }
 .notification-config>div { display:none; padding:9px 0 2px; }

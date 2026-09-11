@@ -5,6 +5,21 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const source = fs.readFileSync(path.join(__dirname, "..", "popup", "popup.js"), "utf8");
+const popupHtml = fs.readFileSync(path.join(__dirname, "..", "popup", "index.html"), "utf8");
+
+test("ChatGPT 专属设置集中在独立分组框中", () => {
+  const generalStart = popupHtml.indexOf('<section class="settings">');
+  const chatgptStart = popupHtml.indexOf('<section class="chatgpt-settings">');
+  const domainsStart = popupHtml.indexOf('<section class="domains">');
+  assert.ok(generalStart >= 0 && chatgptStart > generalStart && domainsStart > chatgptStart);
+  const generalBlock = popupHtml.slice(generalStart, chatgptStart);
+  const chatgptBlock = popupHtml.slice(chatgptStart, domainsStart);
+  assert.doesNotMatch(generalBlock, /trackRequestTime|notifyEnabled/);
+  assert.match(chatgptBlock, /chatgpt\.title/);
+  assert.match(chatgptBlock, /trackRequestTime/);
+  assert.match(chatgptBlock, /notifyEnabled/);
+  assert.ok(chatgptBlock.indexOf("trackRequestTime") < chatgptBlock.indexOf("notifyEnabled"));
+});
 
 function element() {
   const listeners = {};

@@ -1,6 +1,6 @@
 {
   "name": "ai-input-history-extension",
-  "version": "1.29.1",
+  "version": "1.29.2",
   "private": true,
   "description": "Local-first input history for AI chat websites",
   "scripts": {

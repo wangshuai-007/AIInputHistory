@@ -3,10 +3,11 @@
 
   const MESSAGES = {
     "zh-CN": {
-      "timing.setting": "跟踪请求耗时", "timing.hint": "仅 ChatGPT：从发送到回复完成，默认关闭",
+      "chatgpt.title": "ChatGPT 专属设置", "chatgpt.hint": "以下功能仅用于 ChatGPT 对话。",
+      "timing.setting": "跟踪请求耗时", "timing.hint": "从发送到回复完成，默认关闭",
       "timing.running": "请求已等待 {seconds} 秒，点击打开输入历史", "timing.duration": "总耗时 {seconds} 秒", "timing.replyAt": "回复完成 {time}",
       "timing.pending": "尚未记录回复完成", "timing.cancelled": "计时已中止", "timing.failed": "请求异常", "timing.timeout": "未检测到回复完成",
-      "notify.title": "回复完成通知", "notify.enable": "完成后发送通知", "notify.hint": "ChatGPT 回复完成后通知；默认内容为问题前 32 个字",
+      "notify.title": "回复完成通知", "notify.enable": "完成后发送通知", "notify.hint": "回复完成后通知；默认内容为问题前 32 个字",
       "notify.provider": "通知方式", "notify.browser": "浏览器通知", "notify.dingtalk": "钉钉机器人", "notify.feishu": "飞书机器人", "notify.wecom": "企业微信机器人", "notify.custom": "自定义请求", "notify.browserHint": "使用系统通知，不发送到第三方。",
       "notify.method": "请求方法", "notify.variables": "模板变量：{{title}}、{{message}}、{{question}}、{{duration}}、{{completedAt}}、{{pageUrl}}",
       "notify.robotHint": "直接粘贴群机器人完整 Webhook 地址。Webhook 等同发送凭据，请勿公开。",
@@ -40,10 +41,11 @@
       "site.doubao": "豆包", "site.yuanbao": "腾讯元宝", "site.ernie": "文小言"
     },
     en: {
-      "timing.setting": "Track request duration", "timing.hint": "ChatGPT only: send to reply completion. Off by default.",
+      "chatgpt.title": "ChatGPT-only settings", "chatgpt.hint": "These features apply only to ChatGPT conversations.",
+      "timing.setting": "Track request duration", "timing.hint": "From send to reply completion. Off by default.",
       "timing.running": "Waiting {seconds} seconds. Open input history", "timing.duration": "Total {seconds}s", "timing.replyAt": "Completed {time}",
       "timing.pending": "Reply completion not recorded", "timing.cancelled": "Timing stopped", "timing.failed": "Request error", "timing.timeout": "Reply completion not detected",
-      "notify.title": "Completion notifications", "notify.enable": "Notify when completed", "notify.hint": "Notify after ChatGPT finishes; body defaults to the first 32 characters of the prompt",
+      "notify.title": "Completion notifications", "notify.enable": "Notify when completed", "notify.hint": "Notify after the reply finishes; body defaults to the first 32 characters of the prompt",
       "notify.provider": "Notification method", "notify.browser": "Browser notification", "notify.dingtalk": "DingTalk robot", "notify.feishu": "Feishu robot", "notify.wecom": "WeCom robot", "notify.custom": "Custom request", "notify.browserHint": "Uses the system notification service and sends nothing to a third party.",
       "notify.method": "Request method", "notify.variables": "Template variables: {{title}}, {{message}}, {{question}}, {{duration}}, {{completedAt}}, {{pageUrl}}",
       "notify.robotHint": "Paste the full group-robot Webhook URL. Treat it as a sending credential and do not publish it.",
