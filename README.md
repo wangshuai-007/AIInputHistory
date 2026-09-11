@@ -4,16 +4,20 @@
 
 ## 扩展截图
 
-以下截图展示扩展在演示聊天页面中的历史面板，使用示例数据，不包含真实聊天内容。截图为早期版本，最新版本另支持固定消息。
+以下截图由项目内置演示页和真实设置页自动生成，使用示例数据，不包含真实聊天内容。
 
 ### 中文界面
 
-![中文输入历史面板：本地搜索、网站筛选和发送记录](store-assets/screenshot-zh-CN-1280x800.png)
+![中文输入历史面板：本地搜索、网站筛选、发送记录和固定消息](store-assets/screenshot-zh-CN-1280x800.png)
+
+![ChatGPT 专属设置：请求耗时、回复完成通知和 20 秒最低通知耗时](store-assets/screenshot-settings-zh-CN-1280x800.png)
 
 <details>
 <summary>查看英文界面</summary>
 
-![英文输入历史面板：本地搜索、网站筛选和发送记录](store-assets/screenshot-en-1280x800.png)
+![英文输入历史面板：本地搜索、网站筛选、发送记录和固定消息](store-assets/screenshot-en-1280x800.png)
+
+![ChatGPT-only settings: request timing, completion notifications, and minimum notification duration](store-assets/screenshot-settings-en-1280x800.png)
 
 </details>
 
@@ -34,7 +38,7 @@
 - 默认在输入框中按 `Ctrl+R` 打开历史；面板内用上下键选择、Enter 插入、Esc 关闭。
 - 输入框内直接按上/下键会像 Chrome DevTools Console 一样切换历史，向下越过最新记录后恢复切换前的文本。
 - 扩展弹窗可调整历史上限、发送记录上限和自动快照间隔，并可在中英文之间即时切换。
-- ChatGPT 回复完成通知默认关闭；可选择浏览器系统通知、Bark、Server酱、PushPlus、ntfy、Gotify、钉钉机器人、飞书机器人、企业微信机器人，或配置自定义 HTTP 请求。默认通知正文只取问题前 32 个字符，纯图片/附件请求使用专用提示。
+- ChatGPT 回复完成通知默认关闭；可选择浏览器系统通知、Bark、Server酱、PushPlus、ntfy、Gotify、钉钉机器人、飞书机器人、企业微信机器人，或配置自定义 HTTP 请求。默认通知最低耗时为 20 秒，低于阈值的快速回复不会自动通知；测试通知不受该阈值限制。默认通知正文只取问题前 32 个字符，纯图片/附件请求使用专用提示。
 - 页面面板和扩展设置页都能清空未固定历史，固定消息会保留；删除前显示确认弹窗。
 
 ## 安装
@@ -52,7 +56,7 @@
 
 ## ChatGPT 回复完成通知
 
-在扩展设置中开启“完成后发送通知”后，ChatGPT Web 确认一轮回复正常完成时才发送通知。默认正文为本次问题前 32 个字符，超出部分用 `…` 省略；纯图片或附件请求使用“图片或附件请求”。取消生成、失败、超时或切换对话不会发送完成通知。
+在扩展设置中开启“完成后发送通知”后，ChatGPT Web 确认一轮回复正常完成时才发送通知。通知最低耗时默认 20 秒：回复总耗时低于阈值时自动通知会被跳过，达到或超过阈值才发送；可在设置中调整为 0–3600 秒，设为 0 表示不按耗时过滤。测试通知始终绕过最低耗时，用于单独验证通知渠道。默认正文为本次问题前 32 个字符，超出部分用 `…` 省略；纯图片或附件请求使用“图片或附件请求”。取消生成、失败、超时或切换对话不会发送完成通知。
 
 内置支持浏览器系统通知、Bark、Server酱、PushPlus、ntfy、Gotify、钉钉机器人、飞书机器人和企业微信机器人；也支持自定义 HTTP 请求。三个企业群机器人直接粘贴完整 Webhook URL 即可。自定义请求可使用 `{{title}}`、`{{message}}`、`{{question}}`、`{{duration}}`、`{{completedAt}}`、`{{pageUrl}}` 模板变量。完整配置见 [回复完成通知说明](docs/completion-notifications.md)。
 
@@ -80,7 +84,13 @@ npm run build
 
 ## Chrome Web Store 发布
 
-商店图标、宣传图、双语实际界面截图、商店文案、隐私政策和提交检查清单位于 `store-assets/`。重新生成图标和宣传图：
+商店图标、宣传图、双语实际界面截图、商店文案、隐私政策和提交检查清单位于 `store-assets/`。重新生成双语历史面板与 ChatGPT 专属设置截图：
+
+```powershell
+npm run screenshots:store
+```
+
+重新生成图标和宣传图：
 
 ```powershell
 npm run assets:store

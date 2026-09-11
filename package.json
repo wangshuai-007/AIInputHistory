@@ -8,6 +8,7 @@
     "test:browser": "node tests/browser-timing-smoke.mjs",
     "build": "node scripts/validate.mjs",
     "validate:store": "node scripts/validate-store.mjs",
+    "screenshots:store": "node scripts/capture-store-screenshots.mjs",
     "assets:store": "python scripts/generate-store-assets.py",
     "package:store": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-store.ps1"
   },

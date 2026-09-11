@@ -36,7 +36,7 @@ test("浏览器通知只包含截断后的问题摘要", async () => {
   const h = setup({ enabled: true, provider: "browser" });
   const result = await h.send({
     type: "AIH_REQUEST_COMPLETED",
-    event: { promptText: "这是一个需要在回复完成之后发送系统通知的很长很长的问题内容用于验证省略", durationMs: 1200, completedAt: Date.now() }
+    event: { promptText: "这是一个需要在回复完成之后发送系统通知的很长很长的问题内容用于验证省略", durationMs: 21_000, completedAt: Date.now() }
   });
   assert.equal(result.ok, true);
   assert.equal(h.notifications.length, 1);
@@ -60,7 +60,7 @@ test("请求计时按会话 URL 保存，换标签页重新打开仍可读取和
 
 test("第三方通知由后台发送且未开启时不会发送", async () => {
   const h = setup({ enabled: true, provider: "ntfy", ntfyUrl: "https://ntfy.sh", ntfyTopic: "my-topic" });
-  const result = await h.send({ type: "AIH_REQUEST_COMPLETED", event: { promptText: "处理完成", completedAt: Date.now(), durationMs: 2000 } });
+  const result = await h.send({ type: "AIH_REQUEST_COMPLETED", event: { promptText: "处理完成", completedAt: Date.now(), durationMs: 21_000 } });
   assert.equal(result.ok, true);
   assert.equal(h.requests.length, 1);
   assert.equal(h.requests[0].url, "https://ntfy.sh/my-topic");
@@ -68,7 +68,42 @@ test("第三方通知由后台发送且未开启时不会发送", async () => {
 
   const disabled = setup({ enabled: false, provider: "ntfy", ntfyUrl: "https://ntfy.sh", ntfyTopic: "my-topic" });
   const skipped = await disabled.send({ type: "AIH_REQUEST_COMPLETED", event: { promptText: "不会发送" } });
-  assert.equal(skipped.ok, false);
-  assert.match(skipped.error, /尚未开启|尚未保存/);
+  assert.equal(skipped.ok, true);
+  assert.equal(skipped.skipped, true);
+  assert.equal(skipped.reason, "disabled");
   assert.equal(disabled.requests.length, 0);
+});
+
+test("自动通知默认低于 20 秒跳过，达到阈值才发送", async () => {
+  const h = setup({ enabled: true, provider: "browser" });
+  const fast = await h.send({ type: "AIH_REQUEST_COMPLETED", event: { promptText: "快速回复", durationMs: 19_999, completedAt: Date.now() } });
+  assert.equal(fast.ok, true);
+  assert.equal(fast.skipped, true);
+  assert.equal(fast.reason, "below-min-duration");
+  assert.equal(fast.minDurationSeconds, 20);
+  assert.equal(h.notifications.length, 0);
+
+  const threshold = await h.send({ type: "AIH_REQUEST_COMPLETED", event: { promptText: "达到阈值", durationMs: 20_000, completedAt: Date.now() } });
+  assert.equal(threshold.ok, true);
+  assert.equal(h.notifications.length, 1);
+
+  const custom = setup({ enabled: true, provider: "browser", minDurationSeconds: 30 });
+  const customFast = await custom.send({ type: "AIH_REQUEST_COMPLETED", event: { promptText: "自定义阈值以下", durationMs: 29_999, completedAt: Date.now() } });
+  assert.equal(customFast.skipped, true);
+  assert.equal(custom.notifications.length, 0);
+  await custom.send({ type: "AIH_REQUEST_COMPLETED", event: { promptText: "自定义阈值边界", durationMs: 30_000, completedAt: Date.now() } });
+  assert.equal(custom.notifications.length, 1);
+});
+
+test("测试通知绕过最低耗时，但关闭总开关时仍拒绝发送", async () => {
+  const h = setup({ enabled: true, provider: "browser", minDurationSeconds: 120 });
+  const sent = await h.send({ type: "AIH_NOTIFICATION_TEST" });
+  assert.equal(sent.ok, true);
+  assert.equal(h.notifications.length, 1);
+
+  const disabled = setup({ enabled: false, provider: "browser", minDurationSeconds: 0 });
+  const rejected = await disabled.send({ type: "AIH_NOTIFICATION_TEST" });
+  assert.equal(rejected.ok, false);
+  assert.match(rejected.error, /尚未开启|尚未保存/);
+  assert.equal(disabled.notifications.length, 0);
 });

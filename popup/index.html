@@ -41,6 +41,7 @@
         <div class="notifications">
           <h3 data-i18n="notify.title">回复完成通知</h3>
           <div class="setting-row"><span><span data-i18n="notify.enable">完成后发送通知</span><small data-i18n="notify.hint">回复完成后通知；默认内容为问题前 32 个字</small></span><label class="switch"><input id="notifyEnabled" type="checkbox"><span aria-hidden="true"></span></label></div>
+      <label class="notify-row"><span><span data-i18n="notify.minDuration">通知最低耗时（秒）</span><small data-i18n="notify.minDurationHint">低于此耗时不自动发送通知</small></span><input id="notifyMinDurationSeconds" type="number" min="0" max="3600" step="1"></label>
       <label class="notify-row"><span data-i18n="notify.provider">通知方式</span><select id="notifyProvider"><option value="browser" data-i18n="notify.browser">浏览器通知</option><option value="bark">Bark</option><option value="serverchan">Server酱</option><option value="pushplus">PushPlus</option><option value="ntfy">ntfy</option><option value="gotify">Gotify</option><option value="dingtalk" data-i18n="notify.dingtalk">钉钉机器人</option><option value="feishu" data-i18n="notify.feishu">飞书机器人</option><option value="wecom" data-i18n="notify.wecom">企业微信机器人</option><option value="custom" data-i18n="notify.custom">自定义请求</option></select></label>
       <div id="notificationConfig" class="notification-config">
         <div data-notify-provider="browser"><p data-i18n="notify.browserHint">使用 Windows/macOS 浏览器系统通知，不发送到第三方。</p></div>

@@ -2,12 +2,14 @@
 
 ## 已准备文件
 
-- 扩展上传包：`dist/ai-input-history-1.23.0.zip`
+- 扩展上传包：`dist/ai-input-history-1.29.2.zip`
 - 商店图标：`store-assets/store-icon-128.png`
 - 小型宣传图：`store-assets/promo-small-440x280.png`
 - Marquee 宣传图：`store-assets/promo-marquee-1400x560.png`
-- 英文截图：`store-assets/screenshot-en-1280x800.png`
-- 中文截图：`store-assets/screenshot-zh-CN-1280x800.png`
+- 英文历史面板截图：`store-assets/screenshot-en-1280x800.png`
+- 中文历史面板截图：`store-assets/screenshot-zh-CN-1280x800.png`
+- 英文 ChatGPT 设置截图：`store-assets/screenshot-settings-en-1280x800.png`
+- 中文 ChatGPT 设置截图：`store-assets/screenshot-settings-zh-CN-1280x800.png`
 - 中文文案：`store-assets/listing-zh-CN.md`
 - 英文文案：`store-assets/listing-en.md`
 - 双语隐私政策：`store-assets/privacy-policy.md`
@@ -21,6 +23,10 @@ Save and restore text the user enters into AI chat composers using browser-local
 ### `storage` 权限说明
 
 Stores user-created prompt history, drafts, settings, cached site icons, and floating-interface positions locally in the browser. No history is sent to a developer server.
+
+### `notifications` 权限说明
+
+Used only when the user explicitly enables the “response completion notification” feature. The extension uses the browser notification API to show a local notification after an AI response has finished. It is not used for advertising, marketing, tracking, or unsolicited notifications.
 
 ### 网站访问权限说明
 

@@ -10,6 +10,7 @@
   const notifyProvider = document.querySelector("#notifyProvider");
   const testNotificationButton = document.querySelector("#testNotification");
   const notificationInputs = {
+    minDurationSeconds: "#notifyMinDurationSeconds",
     barkUrl: "#notifyBarkUrl", serverChanKey: "#notifyServerChanKey", pushPlusToken: "#notifyPushPlusToken",
     ntfyUrl: "#notifyNtfyUrl", ntfyTopic: "#notifyNtfyTopic", gotifyUrl: "#notifyGotifyUrl", gotifyToken: "#notifyGotifyToken",
     dingtalkWebhook: "#notifyDingtalkWebhook", feishuWebhook: "#notifyFeishuWebhook", wecomWebhook: "#notifyWecomWebhook",
@@ -115,6 +116,7 @@
     const value = (name) => document.querySelector(notificationInputs[name]).value;
     return {
       ...current, enabled: notifyToggle.checked, provider: notifyProvider.value,
+      minDurationSeconds: value("minDurationSeconds"),
       barkUrl: value("barkUrl"), serverChanKey: value("serverChanKey"), pushPlusToken: value("pushPlusToken"),
       ntfyUrl: value("ntfyUrl"), ntfyTopic: value("ntfyTopic"), gotifyUrl: value("gotifyUrl"), gotifyToken: value("gotifyToken"),
       dingtalkWebhook: value("dingtalkWebhook"), feishuWebhook: value("feishuWebhook"), wecomWebhook: value("wecomWebhook"),

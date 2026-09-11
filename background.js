@@ -32,13 +32,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "AIH_REQUEST_COMPLETED" || message?.type === "AIH_NOTIFICATION_TEST") {
-    const event = message.type === "AIH_NOTIFICATION_TEST" ? {
+    const isTest = message.type === "AIH_NOTIFICATION_TEST";
+    const event = isTest ? {
       promptText: "这是一条 ChatGPT 回复完成测试通知",
       durationMs: 3200, completedAt: Date.now(), pageUrl: "https://chatgpt.com/"
     } : message.event;
-    deliverConfiguredNotification(event)
+    deliverConfiguredNotification(event, { ignoreMinimumDuration: isTest })
       .then((result) => {
-        if (result?.skipped) throw new Error("完成通知尚未开启或设置尚未保存");
+        if (isTest && result?.skipped) throw new Error("完成通知尚未开启或设置尚未保存");
         sendResponse({ ok: true, ...result });
       })
       .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
@@ -116,10 +117,15 @@ async function handleTimingSessionMessage(message) {
   return task;
 }
 
-async function deliverConfiguredNotification(event, force = false) {
+async function deliverConfiguredNotification(event, { ignoreMinimumDuration = false } = {}) {
   const settings = await storageGet("aiInputHistorySettings") || {};
   const config = settings.completionNotification || {};
-  if (!force && config.enabled !== true) return { skipped: true };
+  if (config.enabled !== true) return { skipped: true, reason: "disabled" };
+  const parsedMinimum = Number.parseInt(config.minDurationSeconds, 10);
+  const minDurationSeconds = Number.isFinite(parsedMinimum) ? Math.min(3600, Math.max(0, parsedMinimum)) : 20;
+  if (!ignoreMinimumDuration && Number.isFinite(event?.durationMs) && event.durationMs < minDurationSeconds * 1000) {
+    return { skipped: true, reason: "below-min-duration", minDurationSeconds };
+  }
   const model = globalThis.AIInputHistory?.notificationModel;
   if (!model) throw new Error("通知模块未加载");
   const delivery = model.buildDelivery(config, event || {}, settings.language);

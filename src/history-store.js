@@ -5,7 +5,7 @@
   const SETTINGS_KEY = "aiInputHistorySettings";
   const DEFAULT_SHORTCUT = "Ctrl+R";
   const DEFAULT_COMPLETION_NOTIFICATION = Object.freeze({
-    enabled: false, provider: "browser", barkUrl: "", serverChanKey: "", pushPlusToken: "",
+    enabled: false, provider: "browser", minDurationSeconds: 20, barkUrl: "", serverChanKey: "", pushPlusToken: "",
     ntfyUrl: "https://ntfy.sh", ntfyTopic: "", gotifyUrl: "", gotifyToken: "",
     dingtalkWebhook: "", feishuWebhook: "", wecomWebhook: "",
     customMethod: "POST", customUrl: "", customHeaders: "{}",
@@ -49,6 +49,7 @@
     return {
       enabled: source.enabled === true,
       provider: providers.has(source.provider) ? source.provider : DEFAULT_COMPLETION_NOTIFICATION.provider,
+      minDurationSeconds: clampInteger(source.minDurationSeconds, 0, 3600, DEFAULT_COMPLETION_NOTIFICATION.minDurationSeconds),
       barkUrl: text("barkUrl", 1000), serverChanKey: text("serverChanKey", 300), pushPlusToken: text("pushPlusToken", 300),
       ntfyUrl: text("ntfyUrl", 1000, DEFAULT_COMPLETION_NOTIFICATION.ntfyUrl), ntfyTopic: text("ntfyTopic", 300),
       gotifyUrl: text("gotifyUrl", 1000), gotifyToken: text("gotifyToken", 300),

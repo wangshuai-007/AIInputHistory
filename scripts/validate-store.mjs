@@ -12,7 +12,9 @@ const expectedImages = new Map([
   ["store-assets/promo-small-440x280.png", [440, 280]],
   ["store-assets/promo-marquee-1400x560.png", [1400, 560]],
   ["store-assets/screenshot-en-1280x800.png", [1280, 800]],
-  ["store-assets/screenshot-zh-CN-1280x800.png", [1280, 800]]
+  ["store-assets/screenshot-zh-CN-1280x800.png", [1280, 800]],
+  ["store-assets/screenshot-settings-en-1280x800.png", [1280, 800]],
+  ["store-assets/screenshot-settings-zh-CN-1280x800.png", [1280, 800]]
 ]);
 const requiredDocuments = [
   "store-assets/listing-en.md",

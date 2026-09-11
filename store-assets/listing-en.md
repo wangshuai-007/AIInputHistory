@@ -22,6 +22,7 @@ Key features:
 - Add other AI domains manually;
 - English and Chinese interfaces, dark mode, custom shortcuts, and a movable floating button;
 - Track ChatGPT send-to-completion duration and optionally notify when a reply completes;
+- Filter automatic completion notifications by minimum duration (20 seconds by default), so fast replies do not interrupt you;
 - Notifications support browser/system notifications, Bark, ServerChan, PushPlus, ntfy, Gotify, DingTalk, Feishu, WeCom robots, and custom HTTP requests;
 - Clear all local history with an explicit confirmation step.
 
