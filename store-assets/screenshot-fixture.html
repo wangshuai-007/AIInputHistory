@@ -33,7 +33,9 @@
     };
     const savedMemory=JSON.parse(localStorage.getItem("aih-fixture-memory")||"null")||defaults;
     savedMemory.aiInputHistorySettings.trackRequestTime=new URLSearchParams(location.search).has("timing");
+    if(new URLSearchParams(location.search).has("notify")) savedMemory.aiInputHistorySettings.completionNotification={enabled:true,provider:"browser"};
     const memory = globalThis.__testMemory = savedMemory;
+    const notificationMessages = globalThis.__testNotificationMessages = [];
     const storageListeners=[];
     let lockToken="";
     globalThis.chrome={runtime:{lastError:null,sendMessage(message,callback){
@@ -42,6 +44,7 @@
       if(message.type==="AIH_TIMING_SESSION_SAVE"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");for(const [key,value] of Object.entries(states))if(value?.requestId===message.state.requestId)delete states[key];states[`${message.state.site}${message.state.path}`]=message.state;localStorage.setItem("aih-fixture-timings",JSON.stringify(states));callback({ok:true});return}
       if(message.type==="AIH_TIMING_SESSION_LOAD"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");callback({ok:true,state:states[`${message.site}${message.path}`]||null});return}
       if(message.type==="AIH_TIMING_SESSION_CLEAR"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");for(const [key,value] of Object.entries(states))if((message.requestId&&value?.requestId===message.requestId)||(!message.requestId&&key===`${message.site}${message.path}`))delete states[key];localStorage.setItem("aih-fixture-timings",JSON.stringify(states));callback({ok:true});return}
+      if(message.type==="AIH_REQUEST_COMPLETED"){notificationMessages.push(message);callback({ok:true,provider:"browser"});return}
       callback({ok:true});
     }},storage:{onChanged:{addListener(listener){storageListeners.push(listener)}},local:{get(key,callback){callback({[key]:memory[key]})},set(value,callback){const changes=Object.fromEntries(Object.entries(value).map(([key,newValue])=>[key,{oldValue:memory[key],newValue}]));Object.assign(memory,value);localStorage.setItem("aih-fixture-memory",JSON.stringify(memory));storageListeners.forEach((listener)=>listener(changes,"local"));callback()}}}};
   </script>

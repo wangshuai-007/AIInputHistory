@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
-  "version": "1.29.0",
+  "version": "1.29.1",
   "description": "__MSG_extensionDescription__",
   "default_locale": "zh_CN",
   "icons": {
@@ -55,7 +55,7 @@
         "src/history-panel.js",
         "src/content.js"
       ],
-      "run_at": "document_idle",
+      "run_at": "document_start",
       "all_frames": true,
       "match_about_blank": true
     }

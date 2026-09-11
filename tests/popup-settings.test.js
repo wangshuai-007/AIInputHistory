@@ -77,6 +77,10 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
   context.globalThis = context;
   await vm.runInNewContext(source, context);
 
+  assert.equal(elements["#notifyProvider"].disabled, true);
+  assert.equal(elements["#testNotification"].disabled, true);
+  assert.equal(elements["#notifyNtfyUrl"].disabled, true);
+
   const snapshotInput = elements["#snapshotSeconds"];
   snapshotInput.value = "5";
   snapshotInput.listeners.input();
@@ -111,6 +115,16 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
   assert.equal(context.permissionRequests.at(-1).permissions[0], "notifications");
   assert.equal(saves.at(-1).completionNotification.enabled, true);
   assert.equal(saves.at(-1).completionNotification.provider, "browser");
+  assert.equal(elements["#notifyProvider"].disabled, false);
+  assert.equal(elements["#testNotification"].disabled, false);
+  assert.equal(elements["#notifyNtfyUrl"].disabled, false);
+
+  elements["#notifyEnabled"].checked = false;
+  elements["#notifyEnabled"].listeners.change();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(elements["#notifyProvider"].disabled, true);
+  assert.equal(elements["#testNotification"].disabled, true);
+  assert.equal(elements["#notifyNtfyUrl"].disabled, true);
 
   elements["#clear"].listeners.click();
   assert.equal(elements["#clearDialog"].open, true);

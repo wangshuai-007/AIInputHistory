@@ -31,53 +31,76 @@
   }
 
   class SendDetector {
-    constructor(adapter, onSend, capture = () => null, onRequest = () => null) {
+    constructor(adapter, onSend, capture = () => null, onRequest = () => null, onCancelRequest = () => {}) {
       this.adapter = adapter;
       this.onSend = onSend;
       this.lastEmission = null;
       this.pendingEnter = null;
       this.capture = capture;
       this.onRequest = onRequest;
+      this.onCancelRequest = onCancelRequest;
     }
 
     watchEnter(event, input, context) {
       if (event.key !== "Enter" || event.isComposing || event.repeat || !input || !context) return;
       const text = this.adapter.getText(input);
       if (!text.trim()) return;
-      this.cancelEnter();
-      const candidate = { input, text, context, done: false, metadata: { sentAt: Date.now(), timing: this.capture(context), promptText: text } };
+      this.cancelEnter(true);
+      const candidate = {
+        input, text, context, done: false, requestStarted: false, requestHandle: null,
+        metadata: { sentAt: Date.now(), timing: this.capture(context), promptText: text }
+      };
+      candidate.ensureRequest = () => {
+        if (candidate.requestStarted) return candidate.requestHandle;
+        candidate.requestStarted = true;
+        candidate.requestHandle = this.onRequest(candidate.context, candidate.metadata);
+        return candidate.requestHandle;
+      };
       candidate.onInput = (inputEvent) => {
         if (["insertLineBreak", "insertParagraph"].includes(inputEvent.inputType)
-          || (this.adapter.getText(input).trim() && this.adapter.getText(input) !== text)) this.cancelEnter();
+          || (this.adapter.getText(input).trim() && this.adapter.getText(input) !== text)) this.cancelEnter(true);
       };
       input.addEventListener?.("input", candidate.onInput);
       this.pendingEnter = candidate;
+      setTimeout(() => {
+        if (!candidate.done && namespace.SiteProfiles.isSendShortcut(event, context.site)) candidate.ensureRequest();
+      }, 0);
       [40, 140, 400, 900].forEach((delay, index, delays) => {
         setTimeout(() => {
           if (candidate.done) return;
           const connected = input.isConnected;
           const current = connected ? this.adapter.getText(input) : "";
           if (!connected) {
-            this.cancelEnter();
+            if (candidate.requestStarted || namespace.SiteProfiles.isSendShortcut(event, context.site)) {
+              candidate.ensureRequest();
+              this.cancelEnter();
+              this.emit(candidate.text, candidate.context, "keyboard-replaced", candidate.metadata);
+            } else this.cancelEnter(true);
           } else if (didComposerClear(candidate.text, current, connected)) {
+            candidate.ensureRequest();
             this.cancelEnter();
             this.emit(candidate.text, candidate.context, "keyboard", candidate.metadata);
           } else if (current !== candidate.text) {
-            this.cancelEnter();
+            this.cancelEnter(true);
           } else if (index === delays.length - 1) {
-            this.cancelEnter();
-            if (namespace.SiteProfiles.isSendShortcut(event, context.site)) this.emit(candidate.text, candidate.context, "keyboard-attempt", candidate.metadata);
+            if (namespace.SiteProfiles.isSendShortcut(event, context.site)) {
+              candidate.ensureRequest();
+              this.cancelEnter();
+              this.emit(candidate.text, candidate.context, "keyboard-attempt", candidate.metadata);
+            } else this.cancelEnter(true);
           }
         }, delay);
       });
     }
 
     /** Releases a pending Enter observation after another edit or send event. */
-    cancelEnter() {
-      if (!this.pendingEnter) return;
-      this.pendingEnter.done = true;
-      this.pendingEnter.input.removeEventListener?.("input", this.pendingEnter.onInput);
+    cancelEnter(cancelRequest = false) {
+      const candidate = this.pendingEnter;
+      if (!candidate) return;
+      candidate.done = true;
+      candidate.input.removeEventListener?.("input", candidate.onInput);
       this.pendingEnter = null;
+      if (cancelRequest && candidate.requestStarted) this.onCancelRequest(candidate.requestHandle);
     }
 
     handleSubmit(event, input, context) {

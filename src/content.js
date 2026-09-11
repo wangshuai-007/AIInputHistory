@@ -4,13 +4,8 @@
   if (globalThis.__aiInputHistoryLoaded) return;
   globalThis.__aiInputHistoryLoaded = true;
 
-  const store = new namespace.HistoryStore();
-  const settings = await store.getSettings();
-  namespace.i18n.setLanguage(settings.language);
-  let liveSettings = settings;
-  if (!namespace.SiteProfiles.isAllowedSite(location.hostname, settings.customDomains)) return;
-  namespace.SiteProfiles.setSiteIcons(await store.getSiteIcons());
   const adapter = namespace.InputAdapter;
+  const store = new namespace.HistoryStore();
   const historyNavigator = new namespace.HistoryNavigator(store, adapter);
   let activeInput = null;
   let activeContext = null;
@@ -20,6 +15,14 @@
   let storageSyncTimer = null;
   let snapshotInFlight = false;
   let recordQueue = Promise.resolve();
+
+  window.addEventListener("keydown", handleHistoryArrowKeydown, true);
+
+  const settings = await store.getSettings();
+  namespace.i18n.setLanguage(settings.language);
+  let liveSettings = settings;
+  if (!namespace.SiteProfiles.isAllowedSite(location.hostname, settings.customDomains)) return;
+  namespace.SiteProfiles.setSiteIcons(await store.getSiteIcons());
 
   const panel = new namespace.HistoryPanel(
     store,
@@ -70,7 +73,10 @@
     adapter,
     recordSend,
     (context) => requestTiming.capture(context.site),
-    (context, metadata) => startRequestTiming(context, metadata)
+    (context, metadata) => startRequestTiming(context, metadata),
+    (tracking) => {
+      if (tracking && requestTiming.active === tracking) requestTiming.finish("cancelled");
+    }
   );
 
   document.addEventListener("focusin", handleFocus, true);
@@ -124,7 +130,7 @@
     if (adapter.resolveEventEditable(event) !== activeInput) return;
     if (historyNavigator.isApplying()) return;
     if (!adapter.getText(activeInput).trim()) lastSnapshotText = "";
-    historyNavigator.reset();
+    historyNavigator.isBrowsing() ? historyNavigator.interrupt() : historyNavigator.reset();
     clearTimeout(draftTimer);
     draftTimer = setTimeout(saveDraft, 500);
   }
@@ -226,12 +232,29 @@
   }
 
   function handleSendControl(event) {
-    const stop = event.composedPath().some((node) => node?.matches?.('[data-testid="stop-button"],button[aria-label="Stop streaming"],button[aria-label="停止生成"]'));
+    const path = event.composedPath();
+    if (activeInput && path.includes(activeInput)) historyNavigator.interrupt();
+    const stop = path.some((node) => node?.matches?.('[data-testid="stop-button"],button[aria-label="Stop streaming"],button[aria-label="停止生成"]'));
     if (stop && (event.button == null || event.button === 0)) {
       sendDetector.cancelEnter();
       requestTiming.finish("cancelled");
     }
     sendDetector.handlePointerDown(event, activeInput, activeContext);
+  }
+
+  function handleHistoryArrowKeydown(event) {
+    if (event.isComposing || event.ctrlKey || event.altKey || event.shiftKey || event.metaKey) return;
+    if (!["ArrowUp", "ArrowDown"].includes(event.key)) return;
+    if (!activeInput || adapter.resolveEventEditable(event) !== activeInput) return;
+
+    event.stopImmediatePropagation();
+    const direction = event.key === "ArrowUp" ? "up" : "down";
+    if (!historyNavigator.canMove() || adapter.canMoveVertically(activeInput, direction)) return;
+
+    event.preventDefault();
+    historyNavigator.move(direction, activeInput, activeContext).catch((error) => {
+      console.warn("[AI 输入历史] 切换历史记录失败", error);
+    });
   }
 
   async function handleKeydown(event) {
@@ -249,10 +272,10 @@
       sendDetector.watchEnter(event, activeInput, activeContext);
       return;
     }
-    if (!event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey && ["ArrowUp", "ArrowDown"].includes(event.key)) {
-      event.preventDefault();
-      const direction = event.key === "ArrowUp" ? "up" : "down";
-      await historyNavigator.move(direction, activeInput, activeContext);
+    if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)
+      || (["ArrowUp", "ArrowDown"].includes(event.key) && (event.ctrlKey || event.altKey || event.shiftKey || event.metaKey))) {
+      historyNavigator.interrupt();
+      return;
     }
   }
 

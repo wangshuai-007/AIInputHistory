@@ -65,6 +65,24 @@
     return element.innerText || element.textContent || "";
   }
 
+  /** Returns whether the caret still has a visual line to move to before history navigation should take over. */
+  function canMoveVertically(element, direction) {
+    element = resolveEditable(element);
+    if (!element || !["up", "down"].includes(direction)) return false;
+    if (element instanceof HTMLInputElement) return false;
+    if (element instanceof HTMLTextAreaElement) return canMoveTextareaVertically(element, direction);
+    return canMoveContentEditableVertically(element, direction);
+  }
+
+  function canMoveTextareaVertically(element, direction) {
+    const start = element.selectionStart;
+    const end = element.selectionEnd;
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start !== end) return true;
+    const currentTop = textareaCaretTop(element, start);
+    const boundaryTop = textareaCaretTop(element, direction === "up" ? 0 : element.value.length);
+    return Number.isFinite(currentTop) && Number.isFinite(boundaryTop) && Math.abs(currentTop - boundaryTop) > 1;
+  }
+
   function setText(element, value) {
     element = resolveEditable(element);
     if (!element) return;
@@ -83,6 +101,49 @@
       element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
     }
     element.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function textareaCaretTop(element, position) {
+    const style = getComputedStyle(element);
+    const mirror = document.createElement("div");
+    Object.assign(mirror.style, {
+      position: "fixed", left: "-100000px", top: "0", visibility: "hidden",
+      width: `${element.clientWidth}px`, boxSizing: "border-box", whiteSpace: "pre-wrap",
+      overflowWrap: style.overflowWrap || "break-word", wordBreak: style.wordBreak,
+      font: style.font, letterSpacing: style.letterSpacing, lineHeight: style.lineHeight,
+      padding: style.padding, border: style.border, tabSize: style.tabSize
+    });
+    const marker = document.createElement("span");
+    marker.textContent = "\u200b";
+    mirror.append(document.createTextNode(element.value.slice(0, position)), marker);
+    document.body.appendChild(mirror);
+    const top = marker.offsetTop;
+    mirror.remove();
+    return top;
+  }
+
+  function canMoveContentEditableVertically(element, direction) {
+    const selection = window.getSelection();
+    if (!selection?.rangeCount || !selection.isCollapsed || !element.contains(selection.anchorNode)) return true;
+    if (typeof selection.modify !== "function") return fallbackContentEditableBoundary(element, selection, direction);
+    const original = selection.getRangeAt(0).cloneRange();
+    const beforeNode = selection.anchorNode;
+    const beforeOffset = selection.anchorOffset;
+    try {
+      selection.modify("move", direction === "up" ? "backward" : "forward", "line");
+      return selection.anchorNode !== beforeNode || selection.anchorOffset !== beforeOffset;
+    } finally {
+      selection.removeAllRanges();
+      selection.addRange(original);
+    }
+  }
+
+  function fallbackContentEditableBoundary(element, selection, direction) {
+    const probe = selection.getRangeAt(0).cloneRange();
+    const boundary = document.createRange();
+    boundary.selectNodeContents(element);
+    boundary.collapse(direction === "up");
+    return probe.compareBoundaryPoints(Range.START_TO_START, boundary) !== 0;
   }
 
   function replaceContentEditableText(element, value) {
@@ -121,5 +182,5 @@
     return `${location.hostname}:${(hash >>> 0).toString(36)}`;
   }
 
-  namespace.InputAdapter = { composerScore, fieldKey, findComposer, getText, isEditable, resolveEditable, resolveEventEditable, setText };
+  namespace.InputAdapter = { canMoveVertically, composerScore, fieldKey, findComposer, getText, isEditable, resolveEditable, resolveEventEditable, setText };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

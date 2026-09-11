@@ -68,6 +68,7 @@ test("第三方通知由后台发送且未开启时不会发送", async () => {
 
   const disabled = setup({ enabled: false, provider: "ntfy", ntfyUrl: "https://ntfy.sh", ntfyTopic: "my-topic" });
   const skipped = await disabled.send({ type: "AIH_REQUEST_COMPLETED", event: { promptText: "不会发送" } });
-  assert.equal(skipped.skipped, true);
+  assert.equal(skipped.ok, false);
+  assert.match(skipped.error, /尚未开启|尚未保存/);
   assert.equal(disabled.requests.length, 0);
 });

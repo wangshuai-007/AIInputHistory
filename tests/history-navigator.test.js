@@ -39,19 +39,26 @@ test("上下键像 Console 一样连续切换历史并在向下越界时恢复�
   assert.equal(input.value, "正在编辑");
 });
 
-test("用户重新输入后会从最新历史重新开始", async () => {
+test("历史轮换后用户编辑文本会中断本次上下键历史导航", async () => {
   const context = { globalThis: {} };
   vm.runInNewContext(source, context);
   const input = { value: "草稿" };
   const adapter = { getText: (target) => target.value, setText: (target, text) => { target.value = text; } };
   const store = { async getHistory() { return [{ text: "历史一", kind: "send", fieldKey: "composer" }]; } };
   const navigator = new context.globalThis.AIInputHistory.HistoryNavigator(store, adapter);
+  const composition = { site: "chatgpt.com", fieldKey: "composer" };
 
-  await navigator.move("up", input, { site: "chatgpt.com", fieldKey: "composer" });
-  input.value = "新草稿";
+  assert.equal(await navigator.move("up", input, composition), true);
+  assert.equal(input.value, "历史一");
+  input.value = "历史一，继续编辑";
+  assert.equal(navigator.interrupt(), true);
+  assert.equal(navigator.canMove(), false);
+  assert.equal(await navigator.move("up", input, composition), false);
+  assert.equal(await navigator.move("down", input, composition), false);
+  assert.equal(input.value, "历史一，继续编辑");
+
   navigator.reset();
-  await navigator.move("down", input, { site: "chatgpt.com", fieldKey: "composer" });
-  assert.equal(input.value, "新草稿");
+  assert.equal(navigator.canMove(), true);
 });
 
 test("快速上下键共享首次加载且按按键顺序恢复原文", async () => {

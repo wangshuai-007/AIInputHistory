@@ -63,7 +63,7 @@ input:focus-visible,button:focus-visible { outline:2px solid var(--accent); outl
 .notify-template-help { display:block; padding:6px 0; line-height:1.5; overflow-wrap:anywhere; }
 .notify-actions { display:flex; justify-content:flex-end; padding-top:9px; }
 .notify-actions button { height:32px; border:1px solid var(--accent); border-radius:9px; padding:0 11px; background:transparent; color:var(--accent); cursor:pointer; font-size:10px; }
-.notify-actions button:disabled { opacity:.5; cursor:wait; }
+.notify-row select:disabled,.notification-config input:disabled,.notification-config select:disabled,.notification-config textarea:disabled,.notify-actions button:disabled { opacity:.5; cursor:not-allowed; }
 #status { min-height:29px; padding-top:10px; color:var(--accent); font-size:11px; }
 .domains { border-top:1px solid var(--line); margin-top:14px; } .domains>p { margin:0 0 10px; line-height:1.5; }
 #domainForm { display:flex; gap:7px; }

@@ -128,10 +128,17 @@
     notifyToggle.checked = config.enabled === true;
     notifyProvider.value = config.provider || "browser";
     Object.entries(notificationInputs).forEach(([name, selector]) => { document.querySelector(selector).value = config[name] ?? ""; });
+    setNotificationControlsEnabled(config.enabled === true);
     document.querySelectorAll("[data-notify-provider]").forEach((section) => {
       const active = section.dataset.notifyProvider === notifyProvider.value;
       active ? section.classList.add("active") : section.classList.remove("active");
     });
+  }
+
+  function setNotificationControlsEnabled(enabled) {
+    notifyProvider.disabled = !enabled;
+    testNotificationButton.disabled = !enabled;
+    Object.values(notificationInputs).forEach((selector) => { document.querySelector(selector).disabled = !enabled; });
   }
 
   function renderNotificationSettingsPreview() {
@@ -199,6 +206,7 @@
   }
 
   async function testNotification() {
+    if (!notifyToggle.checked) return;
     testNotificationButton.disabled = true;
     try {
       const config = collectNotificationConfig();
@@ -210,7 +218,7 @@
     } catch (error) {
       showStatus(error.message || namespace.i18n.t("notify.testFailed"), true);
     } finally {
-      testNotificationButton.disabled = false;
+      setNotificationControlsEnabled(notifyToggle.checked);
     }
   }
 
