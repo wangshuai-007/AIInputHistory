@@ -15,6 +15,9 @@
   let storageSyncTimer = null;
   let snapshotInFlight = false;
   let recordQueue = Promise.resolve();
+  let conversationStatsTimer = null;
+  let conversationStatsFallbackSessionId = makeSessionId();
+  let lastConversationStat = null;
 
   window.addEventListener("keydown", handleHistoryArrowKeydown, true);
 
@@ -67,6 +70,13 @@
       storageSyncTimer = setTimeout(() => {
         panel.syncFromStorage().catch((error) => console.warn("[AI 输入历史] 同步多窗口历史失败", error));
       }, 50);
+    }
+    if (changes[namespace.STORAGE_KEYS.conversationStats]?.newValue) {
+      const stats = namespace.conversationStatsModel?.sanitizeStats(changes[namespace.STORAGE_KEYS.conversationStats].newValue);
+      if (stats && Object.keys(stats.byAi).length === 0) {
+        lastConversationStat = null;
+        conversationStatsFallbackSessionId = makeSessionId();
+      }
     }
   });
   const sendDetector = new namespace.SendDetector(
@@ -172,9 +182,18 @@
   }
 
   function notifyRequestCompleted(result) {
-    if (liveSettings.completionNotification?.enabled !== true) return;
+    const enabled = liveSettings.completionNotification?.enabled === true;
+    const eligible = result?.notificationEligible !== false;
+    appendNotificationDebug("completion-detected", {
+      enabled, notificationEligible: eligible,
+      durationMs: Number.isFinite(result?.durationMs) ? result.durationMs : null,
+      detectionTrigger: result?.detectionTrigger || "unknown",
+      visibility: document.visibilityState || "unknown",
+      page: `${location.hostname}${location.pathname}`
+    });
+    if (!enabled || !eligible) return;
     try {
-      chrome.runtime.sendMessage({ type: "AIH_REQUEST_COMPLETED", event: result }, (response) => {
+      chrome.runtime.sendMessage({ type: "AIH_REQUEST_COMPLETED", event: result, visibility: document.visibilityState || "unknown" }, (response) => {
         const error = chrome.runtime.lastError;
         if (error) {
           console.warn("[AI 输入历史] 发送完成通知失败", error.message || error);
@@ -185,6 +204,14 @@
     } catch (error) {
       console.warn("[AI 输入历史] 发送完成通知失败", error);
     }
+  }
+
+  function appendNotificationDebug(stage, details = {}) {
+    try {
+      chrome.runtime.sendMessage({ type: "AIH_NOTIFICATION_DEBUG_APPEND", entry: { stage, ...details } }, () => {
+        void chrome.runtime.lastError;
+      });
+    } catch {}
   }
 
   function startRequestTiming(context, metadata = {}) {
@@ -200,6 +227,7 @@
     if (!text.trim()) return;
     clearTimeout(draftTimer);
     lastSnapshotText = text;
+    scheduleConversationStat(context, Number.isFinite(metadata.sentAt) ? metadata.sentAt : Date.now());
     if (activeContext === context) {
       historyNavigator.reset();
       activeContext = { ...context, sessionId: makeSessionId() };
@@ -218,6 +246,40 @@
         throw error;
       }
     });
+  }
+
+  function scheduleConversationStat(context, sentAt) {
+    const model = namespace.conversationStatsModel;
+    if (!model || typeof store.recordConversationStat !== "function" || window.top !== window) return;
+    let immediate = model.resolveConversation(location, conversationStatsFallbackSessionId);
+    if (!immediate.stable && lastConversationStat?.stable) {
+      conversationStatsFallbackSessionId = makeSessionId();
+      immediate = model.resolveConversation(location, conversationStatsFallbackSessionId);
+    }
+    clearTimeout(conversationStatsTimer);
+    if (immediate.stable) {
+      recordConversationStat(context, sentAt, immediate);
+      return;
+    }
+    conversationStatsTimer = setTimeout(() => recordConversationStat(context, sentAt), 1500);
+  }
+
+  async function recordConversationStat(context, sentAt, resolvedOverride = null) {
+    const model = namespace.conversationStatsModel;
+    if (!model || !context?.site) return;
+    const aiKey = model.aiKeyForSite(context.site);
+    const resolved = resolvedOverride || model.resolveConversation(location, conversationStatsFallbackSessionId);
+    if (lastConversationStat?.aiKey === aiKey && lastConversationStat.key === resolved.key) return;
+    try {
+      if (lastConversationStat?.aiKey === aiKey && lastConversationStat.stable === false && resolved.stable === true) {
+        await store.markConversationStatSeen?.(aiKey, resolved.key, sentAt, lastConversationStat.key);
+      } else {
+        await store.recordConversationStat({ aiKey, site: context.site, conversationKey: resolved.key, at: sentAt });
+      }
+      lastConversationStat = { aiKey, key: resolved.key, stable: resolved.stable };
+    } catch (error) {
+      console.warn("[AI 输入历史] 保存 AI 对话统计失败", error);
+    }
   }
 
   function queueRecord(operation) {

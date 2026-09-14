@@ -7,10 +7,12 @@
   /** Observes one ChatGPT generation without intercepting network traffic or retaining reply text. */
   class RequestTiming {
     constructor({ store, onTick, onComplete = () => {}, sample = sampleChatGPT, now = Date.now,
-      interval = (callback, ms) => setInterval(callback, ms), clear = (id) => clearInterval(id), session = null }) {
-      Object.assign(this, { store, onTick, onComplete, sample, now, interval, clear, session });
+      interval = (callback, ms) => setInterval(callback, ms), clear = (id) => clearInterval(id),
+      observe = observeChatGPT, session = null }) {
+      Object.assign(this, { store, onTick, onComplete, sample, now, interval, clear, observe, session });
       this.enabled = false;
       this.active = null;
+      this.observer = null;
     }
 
     /** Takes the pre-send baseline, including for Enter sends confirmed a moment later. */
@@ -38,13 +40,15 @@
         known: new Set(observation.baseline.replies.map((reply) => reply.key)),
         knownErrors: new Set(observation.baseline.errors || []), sawReply: false, sawBusy: observation.baseline.busy === true,
         quietSince: null, replyActivity: null, entryId: null, result: null,
+        notificationEligible: true, restored: false,
         completionContext: { ...completionContext }
       };
       this.active = request;
       this.persistSession(request);
       this.onTick(Math.max(0, this.now() - request.startedAt));
-      this.timer = this.interval(() => this.safeTick(), 250);
-      this.safeTick();
+      this.timer = this.interval(() => this.safeTick("timer"), 250);
+      this.startObserver();
+      this.safeTick("start");
       return request;
     }
 
@@ -76,14 +80,16 @@
         knownErrors: new Set(Array.isArray(saved.knownErrors) ? saved.knownErrors : []),
         sawReply: saved.sawReply === true, sawBusy: saved.sawBusy === true,
         quietSince: null, replyActivity: null, entryId: saved.entryId || null, result: null,
+        notificationEligible: false, restored: true,
         adoptedPath: saved.adoptedPath === true || saved.path !== current.path,
         completionContext: saved.completionContext && typeof saved.completionContext === "object" ? { ...saved.completionContext } : {}
       };
       this.active = request;
       this.persistSession(request);
       this.onTick(Math.max(0, this.now() - request.startedAt));
-      this.timer = this.interval(() => this.safeTick(), 250);
-      this.safeTick();
+      this.timer = this.interval(() => this.safeTick("timer"), 250);
+      this.startObserver();
+      this.safeTick("start");
       return request;
     }
 
@@ -107,7 +113,7 @@
     }
 
     /** Samples generation signals; elapsed time uses timestamps, not timer callback counts. */
-    tick() {
+    tick(trigger = "timer") {
       const request = this.active;
       if (!request) return;
       const elapsed = Math.max(0, this.now() - request.startedAt);
@@ -119,6 +125,7 @@
       const replies = state.replies.filter((reply) => !request.known.has(reply.key));
       const sawReplyBefore = request.sawReply;
       const sawBusyBefore = request.sawBusy;
+      if (request.restored && state.busy === true) request.notificationEligible = true;
       request.sawReply ||= replies.some((reply) => reply.nonempty);
       request.sawBusy ||= state.busy === true;
       if ((!sawReplyBefore && request.sawReply) || (!sawBusyBefore && request.sawBusy)) this.persistSession(request);
@@ -131,14 +138,36 @@
       if (state.busy) { request.quietSince = null; return; }
       if (replyActivity && request.quietSince == null) request.quietSince = this.now();
       if (!request.sawReply || !request.quietSince) return;
-      const strongCompletionSignal = state.ready === true || request.sawBusy || replies.some((reply) => reply.complete);
+      const explicitComplete = replies.some((reply) => reply.complete);
+      const generationStopped = request.sawBusy && state.ready === true;
+      if (trigger === "mutation" && (explicitComplete || generationStopped)) {
+        request.completionTrigger = trigger;
+        this.finish("completed", request.quietSince);
+        return;
+      }
+      const strongCompletionSignal = state.ready === true || request.sawBusy || explicitComplete;
       const stableFor = this.now() - request.quietSince;
-      if (stableFor >= (strongCompletionSignal ? 500 : 1250)) this.finish("completed", request.quietSince);
+      if (stableFor >= (strongCompletionSignal ? 500 : 1250)) {
+        request.completionTrigger = trigger;
+        this.finish("completed", request.quietSince);
+      }
     }
 
-    safeTick() {
-      try { this.tick(); }
+    safeTick(trigger = "timer") {
+      try { this.tick(trigger); }
       catch (error) { this.finish("failed"); console.warn("[AI Input History] 回复观察失败", error); }
+    }
+
+    startObserver() {
+      this.stopObserver();
+      try { this.observer = this.observe?.(() => this.safeTick("mutation")) || null; }
+      catch (error) { console.warn("[AI Input History] 无法监听后台回复变化", error); }
+    }
+
+    stopObserver() {
+      try { this.observer?.disconnect?.(); }
+      catch {}
+      this.observer = null;
     }
 
     acceptPath(request, path) {
@@ -157,16 +186,18 @@
       const request = this.active;
       if (!request) return;
       this.clear(this.timer);
+      this.stopObserver();
       this.active = null;
       this.clearSession(request);
       request.result = { status, startedAt: request.startedAt };
       if (status === "completed") Object.assign(request.result, {
-        completedAt, durationMs: Math.max(0, completedAt - request.startedAt)
+        completedAt, durationMs: Math.max(0, completedAt - request.startedAt),
+        detectionTrigger: request.completionTrigger || "timer"
       });
       this.onTick(null);
       if (request.entryId) this.persist(request);
       if (status === "completed") {
-        try { this.onComplete({ ...request.result, ...request.completionContext }); }
+        try { this.onComplete({ ...request.result, ...request.completionContext, notificationEligible: request.notificationEligible !== false }); }
         catch (error) { console.warn("[AI Input History] 完成通知触发失败", error); }
       }
     }
@@ -180,6 +211,19 @@
 
   function visible(element) {
     return Boolean(element?.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
+  }
+
+  function observeChatGPT(callback) {
+    if (typeof MutationObserver !== "function" || !document?.documentElement) return null;
+    const observer = new MutationObserver(() => callback());
+    observer.observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["disabled", "aria-disabled", "data-is-streaming", "data-testid", "aria-label"]
+    });
+    return observer;
   }
 
   /** Reads ChatGPT's new assistant turns and completion controls; no response content is persisted. */

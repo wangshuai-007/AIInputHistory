@@ -107,3 +107,41 @@ test("测试通知绕过最低耗时，但关闭总开关时仍拒绝发送", as
   assert.match(rejected.error, /尚未开启|尚未保存/);
   assert.equal(disabled.notifications.length, 0);
 });
+
+test("企业微信渠道只发 HTTP，不会创建浏览器系统通知，并留下脱敏日志", async () => {
+  const h = setup({
+    enabled: true, provider: "wecom", minDurationSeconds: 20,
+    wecomWebhook: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=VERY_SECRET_KEY"
+  });
+  const result = await h.send({
+    type: "AIH_REQUEST_COMPLETED",
+    event: { promptText: "不应进入调试日志的问题正文", durationMs: 25_000, completedAt: Date.now(), pageUrl: "https://chatgpt.com/c/example" }
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.provider, "wecom");
+  assert.equal(result.deliveryKind, "http");
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.notifications.length, 0);
+
+  const logs = h.data.aiInputHistoryNotificationDebugLog;
+  assert.ok(logs.some((entry) => entry.stage === "config-resolved" && entry.provider === "wecom"));
+  assert.ok(logs.some((entry) => entry.stage === "http-send" && entry.provider === "wecom" && entry.endpointHost === "qyapi.weixin.qq.com"));
+  assert.equal(logs.some((entry) => entry.stage === "browser-create"), false);
+  const serialized = JSON.stringify(logs);
+  assert.doesNotMatch(serialized, /VERY_SECRET_KEY|不应进入调试日志的问题正文/);
+});
+
+test("页面追加的通知调试日志只保留白名单字段", async () => {
+  const h = setup({ enabled: false, provider: "browser" });
+  const appended = await h.send({
+    type: "AIH_NOTIFICATION_DEBUG_APPEND",
+    entry: { stage: "completion-detected", enabled: true, page: "chatgpt.com/c/one", promptText: "secret prompt", webhook: "https://example.com/?token=secret" }
+  });
+  assert.equal(appended.ok, true);
+  const result = await h.send({ type: "AIH_NOTIFICATION_DEBUG_GET" });
+  assert.equal(result.ok, true);
+  assert.equal(result.logs.at(-1).stage, "completion-detected");
+  assert.equal(result.logs.at(-1).page, "chatgpt.com/c/one");
+  assert.equal("promptText" in result.logs.at(-1), false);
+  assert.equal("webhook" in result.logs.at(-1), false);
+});

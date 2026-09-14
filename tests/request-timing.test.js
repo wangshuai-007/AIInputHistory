@@ -7,7 +7,7 @@ const vm = require('node:vm');
 function setup() {
   const env = { globalThis: {}, console, setInterval, clearInterval };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/request-timing.js'), 'utf8'), env);
-  const h = { now: 1000, sample: { path: '/c/one', replies: [], busy: false, errors: [] }, writes: [], ticks: [], activeTimers: 0, sessionState: null };
+  const h = { now: 1000, sample: { path: '/c/one', replies: [], busy: false, errors: [] }, writes: [], ticks: [], activeTimers: 0, observerActive: false, mutation: null, sessionState: null };
   h.session = {
     save(state) { h.sessionState = JSON.parse(JSON.stringify(state)); },
     async load() { return h.sessionState ? JSON.parse(JSON.stringify(h.sessionState)) : null; },
@@ -16,7 +16,12 @@ function setup() {
   h.tracker = new env.globalThis.AIInputHistory.RequestTiming({
     store: { async updateRequestTiming(id, data) { h.writes.push({ id, ...data }); } },
     sample: () => h.sample, now: () => h.now, onTick: (time) => h.ticks.push(time), session: h.session,
-    interval: () => { h.activeTimers++; return 1; }, clear: () => h.activeTimers--
+    interval: () => { h.activeTimers++; return 1; }, clear: () => h.activeTimers--,
+    observe: (callback) => {
+      h.mutation = callback;
+      h.observerActive = true;
+      return { disconnect() { h.observerActive = false; } };
+    }
   });
   h.start = () => { h.tracker.setEnabled(true); return h.tracker.start('chatgpt.com'); };
   h.complete = () => {
@@ -122,6 +127,24 @@ test('回复底部操作按钮缺失时，停止生成结束且发送按钮恢�
   assert.equal(h.writes[0].completedAt, 6000);
 });
 
+test('后台标签页定时器未调度时，DOM 变化仍能及时完成并停止观察', () => {
+  const h = setup();
+  h.tracker.attach(h.start(), 'entry');
+  assert.equal(h.observerActive, true);
+  h.sample = { ...h.sample, busy: true, ready: false, replies: [{ key: 'new', nonempty: true, complete: false, activity: '4:2' }] };
+  h.now = 3000;
+  h.mutation();
+  assert.equal(h.writes.length, 0);
+
+  h.sample = { ...h.sample, busy: false, ready: true, replies: [{ key: 'new', nonempty: true, complete: false, activity: '20:5' }] };
+  h.now = 5200;
+  h.mutation();
+  assert.equal(h.writes.length, 1, '不依赖 interval 再次执行也应完成');
+  assert.equal(h.writes[0].status, 'completed');
+  assert.equal(h.observerActive, false, '完成后应释放 DOM observer');
+  assert.equal(h.activeTimers, 0, '完成后也应释放轮询计时器');
+});
+
 test('超快回复未采到生成中、发送按钮和底部操作按钮时，回复稳定后仍能判定完成', () => {
   const h = setup(); h.tracker.attach(h.start(), 'entry');
   h.sample = { ...h.sample, busy: false, ready: false, replies: [{ key: 'new', nonempty: true, complete: false, activity: '5:2' }] };
@@ -147,6 +170,7 @@ test('只有确认回复完成才触发完成回调并保留问题上下文', ()
   assert.equal(completed[0].promptText, '请检查这个问题');
   assert.equal(completed[0].pageUrl, 'https://chatgpt.com/c/1');
   assert.equal(completed[0].status, 'completed');
+  assert.equal(completed[0].notificationEligible, true);
 
   const h2 = setup();
   const cancelled = [];
@@ -169,9 +193,10 @@ test('重新打开同一会话 URL 后恢复计时并保留原始发送时间', 
 
   h.activeTimers = 0;
   const Tracker = h.tracker.constructor;
+  const restoredCompletions = [];
   const restored = new Tracker({
     store: { async updateRequestTiming(id, data) { h.writes.push({ id, ...data }); } },
-    sample: () => h.sample, now: () => h.now, onTick: (time) => h.ticks.push(time), session: h.session,
+    sample: () => h.sample, now: () => h.now, onTick: (time) => h.ticks.push(time), onComplete: (event) => restoredCompletions.push(event), session: h.session,
     interval: () => { h.activeTimers++; return 2; }, clear: () => h.activeTimers--
   });
   restored.setEnabled(true);
@@ -188,7 +213,33 @@ test('重新打开同一会话 URL 后恢复计时并保留原始发送时间', 
   assert.equal(h.writes.at(-1).status, 'completed');
   assert.equal(h.writes.at(-1).startedAt, 1000);
   assert.equal(h.writes.at(-1).durationMs, 8000);
+  assert.equal(restoredCompletions.length, 1);
+  assert.equal(restoredCompletions[0].notificationEligible, true);
   assert.equal(h.sessionState, null);
+});
+
+test('恢复时页面已存在新回复只补记完成，不补发通知', async () => {
+  const h = setup();
+  h.tracker.setEnabled(true);
+  const request = h.tracker.start('chatgpt.com', null, { promptText: '本机旧问题', pageUrl: 'https://chatgpt.com/c/one' });
+  h.tracker.attach(request, 'entry');
+  const Tracker = h.tracker.constructor;
+  h.activeTimers = 0;
+  h.now = 10_000;
+  h.sample = { path: '/c/one', busy: false, ready: true, errors: [], replies: [{ key: 'remote-reply', nonempty: true, complete: true, activity: '20:5' }] };
+  const completed = [];
+  const restored = new Tracker({
+    store: { async updateRequestTiming(id, data) { h.writes.push({ id, ...data }); } },
+    sample: () => h.sample, now: () => h.now, onTick: () => {}, onComplete: (event) => completed.push(event), session: h.session,
+    interval: () => 2, clear: () => {}
+  });
+  restored.setEnabled(true);
+  await restored.restore('chatgpt.com');
+  h.now = 10_500;
+  restored.tick();
+  assert.equal(h.writes.at(-1).status, 'completed');
+  assert.equal(completed.length, 1);
+  assert.equal(completed[0].notificationEligible, false);
 });
 
 test('默认计时器不以 RequestTiming 对象作为浏览器原生方法的 this', () => {

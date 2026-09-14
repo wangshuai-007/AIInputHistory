@@ -19,6 +19,17 @@
       <div><strong id="sendCount">—</strong><span data-i18n="summary.send">发送记录</span></div>
       <div><strong id="draftCount">—</strong><span data-i18n="summary.draft">未发送草稿</span></div>
     </section>
+    <section class="conversation-stats">
+      <div class="conversation-stats-head"><div><h2 data-i18n="conversation.title">AI 对话统计</h2><p data-i18n="conversation.hint">按实际发送过的会话去重统计，每种 AI 单独记录。</p></div><button id="clearConversationStats" type="button" data-i18n="conversation.clear">清空统计</button></div>
+      <div class="conversation-metrics">
+        <div><strong id="conversationTotal">0</strong><span data-i18n="conversation.total">总对话</span></div>
+        <div><strong id="conversationToday">0</strong><span data-i18n="conversation.today">今日</span></div>
+        <div><strong id="conversationWeek">0</strong><span data-i18n="conversation.week">本周</span></div>
+        <div><strong id="conversationMonth">0</strong><span data-i18n="conversation.month">本月</span></div>
+      </div>
+      <p id="conversationActivePeriods" class="conversation-active"></p>
+      <div id="conversationStatsList" class="conversation-stats-list"></div>
+    </section>
     <section class="settings">
       <h2 data-i18n="settings.title">记录设置</h2>
       <label><span><span data-i18n="settings.historyLimit">历史上限</span><small data-i18n="settings.historyLimitHint">最近输入，按时间倒序</small></span><input id="historyLimit" type="number" min="20" max="500" step="10"></label>
@@ -56,6 +67,16 @@
         <div data-notify-provider="custom"><label><span data-i18n="notify.method">请求方法</span><select id="notifyCustomMethod"><option>POST</option><option>GET</option><option>PUT</option><option>PATCH</option></select></label><label><span>URL</span><input id="notifyCustomUrl" type="url" placeholder="https://example.com/push"></label><label class="notify-multiline"><span>Headers JSON</span><textarea id="notifyCustomHeaders" rows="3"></textarea></label><label class="notify-multiline"><span>Body</span><textarea id="notifyCustomBody" rows="4"></textarea></label><small class="notify-template-help" data-i18n="notify.variables">模板变量：{{title}}、{{message}}、{{question}}、{{duration}}、{{completedAt}}、{{pageUrl}}</small></div>
           </div>
           <div class="notify-actions"><button id="testNotification" type="button" data-i18n="notify.test">发送测试通知</button></div>
+          <details class="notify-debug">
+            <summary data-i18n="notify.debugTitle">通知调试日志</summary>
+            <small data-i18n="notify.debugHint">仅记录通知流程和渠道，不记录问题正文、Webhook 或 Token；最多保留最近 100 条。</small>
+            <pre id="notificationDebugLog" data-i18n="notify.debugEmpty">暂无通知日志</pre>
+            <div class="notify-debug-actions">
+              <button id="refreshNotificationDebug" type="button" data-i18n="notify.debugRefresh">刷新</button>
+              <button id="copyNotificationDebug" type="button" data-i18n="notify.debugCopy">复制</button>
+              <button id="clearNotificationDebug" type="button" data-i18n="notify.debugClear">清空</button>
+            </div>
+          </details>
         </div>
       </div>
     </section>
@@ -76,6 +97,7 @@
   <script src="../src/history-store.js"></script>
   <script src="../src/i18n.js"></script>
   <script src="../src/site-profiles.js"></script>
+  <script src="../src/conversation-stats.js"></script>
   <script src="../src/completion-notification.js"></script>
   <script src="popup.js"></script>
 </body>

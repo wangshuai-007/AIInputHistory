@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
-  "version": "1.29.2",
+  "version": "1.30.0",
   "description": "__MSG_extensionDescription__",
   "default_locale": "zh_CN",
   "icons": {
@@ -40,6 +40,7 @@
         "src/history-store.js",
         "src/i18n.js",
         "src/site-profiles.js",
+        "src/conversation-stats.js",
         "src/site-icon.js",
         "src/input-adapter.js",
         "src/history-navigator.js",

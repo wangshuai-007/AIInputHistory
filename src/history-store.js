@@ -3,6 +3,7 @@
 
   const STORAGE_KEY = "aiInputHistoryState";
   const SETTINGS_KEY = "aiInputHistorySettings";
+  const CONVERSATION_STATS_KEY = "aiInputHistoryConversationStats";
   const DEFAULT_SHORTCUT = "Ctrl+R";
   const DEFAULT_COMPLETION_NOTIFICATION = Object.freeze({
     enabled: false, provider: "browser", minDurationSeconds: 20, barkUrl: "", serverChanKey: "", pushPlusToken: "",
@@ -364,6 +365,69 @@
       return state.siteIcons;
     }
 
+    async getConversationStats(now = Date.now()) {
+      const model = namespace.conversationStatsModel;
+      if (!model) return { all: { total: 0, today: 0, thisWeek: 0, thisMonth: 0, activeDays: 0, activeWeeks: 0, activeMonths: 0 }, rows: [] };
+      const result = await storageGet(CONVERSATION_STATS_KEY);
+      return model.summarize(result[CONVERSATION_STATS_KEY], now);
+    }
+
+    async recordConversationStat({ aiKey, site, conversationKey, at = Date.now() } = {}) {
+      const model = namespace.conversationStatsModel;
+      const key = String(aiKey || "").toLocaleLowerCase();
+      if (!model || !/^[a-z0-9:._-]{1,120}$/i.test(key) || !conversationKey || !Number.isFinite(at)) return { added: false };
+      return withStorageLock(async () => {
+        const result = await storageGet(CONVERSATION_STATS_KEY);
+        const stats = model.sanitizeStats(result[CONVERSATION_STATS_KEY]);
+        const bucket = stats.byAi[key] ||= { site: String(site || "").slice(0, 255), total: 0, days: {}, weeks: {}, months: {}, seen: {} };
+        const seenKey = model.fingerprint(`${key}|${conversationKey}`);
+        const periods = model.periodKeys(at);
+        const existing = bucket.seen[seenKey];
+        const isNewConversation = !existing;
+        const activity = existing || { firstAt: at, lastDay: "", lastWeek: "", lastMonth: "" };
+        const dayChanged = activity.lastDay !== periods.day;
+        const weekChanged = activity.lastWeek !== periods.week;
+        const monthChanged = activity.lastMonth !== periods.month;
+        if (!isNewConversation && !dayChanged && !weekChanged && !monthChanged) {
+          return { added: false, activityAdded: false, aiKey: key, fingerprint: seenKey };
+        }
+        bucket.site ||= String(site || "").slice(0, 255);
+        if (isNewConversation) bucket.total += 1;
+        if (dayChanged) bucket.days[periods.day] = (bucket.days[periods.day] || 0) + 1;
+        if (weekChanged) bucket.weeks[periods.week] = (bucket.weeks[periods.week] || 0) + 1;
+        if (monthChanged) bucket.months[periods.month] = (bucket.months[periods.month] || 0) + 1;
+        bucket.seen[seenKey] = { firstAt: activity.firstAt, lastDay: periods.day, lastWeek: periods.week, lastMonth: periods.month };
+        await storageSet({ [CONVERSATION_STATS_KEY]: stats });
+        return { added: isNewConversation, activityAdded: true, aiKey: key, fingerprint: seenKey };
+      });
+    }
+
+    async markConversationStatSeen(aiKey, conversationKey, at = Date.now(), sourceConversationKey = "") {
+      const model = namespace.conversationStatsModel;
+      const key = String(aiKey || "").toLocaleLowerCase();
+      if (!model || !/^[a-z0-9:._-]{1,120}$/i.test(key) || !conversationKey || !Number.isFinite(at)) return false;
+      return withStorageLock(async () => {
+        const result = await storageGet(CONVERSATION_STATS_KEY);
+        const stats = model.sanitizeStats(result[CONVERSATION_STATS_KEY]);
+        const bucket = stats.byAi[key];
+        if (!bucket) return false;
+        const seenKey = model.fingerprint(`${key}|${conversationKey}`);
+        if (!Object.prototype.hasOwnProperty.call(bucket.seen, seenKey)) {
+          const sourceKey = sourceConversationKey ? model.fingerprint(`${key}|${sourceConversationKey}`) : "";
+          const source = sourceKey ? bucket.seen[sourceKey] : null;
+          const periods = model.periodKeys(at);
+          bucket.seen[seenKey] = source ? { ...source } : { firstAt: at, lastDay: periods.day, lastWeek: periods.week, lastMonth: periods.month };
+          await storageSet({ [CONVERSATION_STATS_KEY]: stats });
+        }
+        return true;
+      });
+    }
+
+    async clearConversationStats() {
+      const model = namespace.conversationStatsModel;
+      await withStorageLock(() => storageSet({ [CONVERSATION_STATS_KEY]: model?.initialStats?.() || { version: 1, byAi: {} } }));
+    }
+
     async saveSiteIcon(site, dataUrl) {
       if (!site || !/^data:image\//.test(dataUrl || "") || dataUrl.length > 180_000) return;
       await withStorageLock(async () => {
@@ -406,6 +470,6 @@
   namespace.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
   namespace.DEFAULT_COMPLETION_NOTIFICATION = DEFAULT_COMPLETION_NOTIFICATION;
   namespace.HistoryStore = HistoryStore;
-  namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY };
+  namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY, conversationStats: CONVERSATION_STATS_KEY };
   namespace.historyModel = { collapseSnapshotsForSend, compactSentSnapshots, filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeCompletionNotification, sanitizeSettings, shortcutFromEvent };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

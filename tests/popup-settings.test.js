@@ -45,11 +45,14 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
     "#historyLimit", "#sendLimit", "#snapshotSeconds", "#launcherEnabled", "#domainInput", "#trackRequestTime",
     "#notifyEnabled", "#notifyProvider", "#notifyMinDurationSeconds", "#testNotification", "#notifyBarkUrl", "#notifyServerChanKey", "#notifyPushPlusToken",
     "#notifyNtfyUrl", "#notifyNtfyTopic", "#notifyGotifyUrl", "#notifyGotifyToken", "#notifyDingtalkWebhook", "#notifyFeishuWebhook", "#notifyWecomWebhook", "#notifyCustomMethod", "#notifyCustomUrl", "#notifyCustomHeaders", "#notifyCustomBody",
+    "#notificationDebugLog", "#refreshNotificationDebug", "#copyNotificationDebug", "#clearNotificationDebug",
+    "#clearConversationStats", "#conversationStatsList", "#conversationActivePeriods", "#conversationTotal", "#conversationToday", "#conversationWeek", "#conversationMonth",
     "#domainList", "#domainForm", "#clear", "#status", "#totalCount", "#sendCount", "#draftCount",
     "#shortcutCapture", "#shortcutDisable", "#languageSelect", "#clearDialog", "#clearDialogError", "#cancelClear", "#confirmClear", "#extensionVersion"
   ].map((selector) => [selector, element()]));
   const saves = [];
   let clearCount = 0;
+  let clearStatsCount = 0;
   class HistoryStore {
     async getSettings() {
       return {
@@ -59,8 +62,10 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
       };
     }
     async getState() { return { entries: [], drafts: {} }; }
+    async getConversationStats() { return { all: { total: 0, today: 0, thisWeek: 0, thisMonth: 0, activeDays: 0, activeWeeks: 0, activeMonths: 0 }, rows: [] }; }
     async patchSettings(patch) { saves.push(patch); return { ...await this.getSettings(), ...patch, snapshotSeconds: Number(patch.snapshotSeconds || 60) }; }
     async clearHistory() { clearCount += 1; }
+    async clearConversationStats() { clearStatsCount += 1; }
   }
   const context = {
     chrome: {
@@ -72,12 +77,14 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
     permissionRequests: [],
     AIInputHistory: { HistoryStore, i18n: (() => {
       let language = "zh-CN";
-      return { setLanguage(value) { language = value === "en" ? "en" : "zh-CN"; }, language: () => language, localize() {}, t: (key) => key };
+      return { setLanguage(value) { language = value === "en" ? "en" : "zh-CN"; }, language: () => language, locale: () => language === "en" ? "en-US" : "zh-CN", localize() {}, t: (key) => key };
     })(), historyModel: {
       shortcutFromEvent(event) { return event.ctrlKey && event.code === "KeyK" ? "Ctrl+K" : ""; },
       normalizeDomain() { return ""; },
       sanitizeSettings(value) { return value; }
-    }, STORAGE_KEYS: { settings: "settings", state: "state" } },
+    }, conversationStatsModel: {
+      summarize() { return { all: { total: 0, today: 0, thisWeek: 0, thisMonth: 0, activeDays: 0, activeWeeks: 0, activeMonths: 0 }, rows: [] }; }
+    }, SiteProfiles: { PROFILES: [], icon: () => "", displayName: (site) => site }, STORAGE_KEYS: { settings: "settings", state: "state", conversationStats: "conversationStats" } },
     document: {
       documentElement: { lang: "" },
       querySelector: (selector) => elements[selector],
@@ -149,6 +156,11 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
   assert.equal(elements["#notifyMinDurationSeconds"].disabled, true);
   assert.equal(elements["#testNotification"].disabled, true);
   assert.equal(elements["#notifyNtfyUrl"].disabled, true);
+
+  await elements["#clearConversationStats"].listeners.click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(clearStatsCount, 1);
+  assert.equal(clearCount, 0);
 
   elements["#clear"].listeners.click();
   assert.equal(elements["#clearDialog"].open, true);

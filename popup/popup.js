@@ -9,6 +9,10 @@
   const notifyToggle = document.querySelector("#notifyEnabled");
   const notifyProvider = document.querySelector("#notifyProvider");
   const testNotificationButton = document.querySelector("#testNotification");
+  const notificationDebugLog = document.querySelector("#notificationDebugLog");
+  const refreshNotificationDebugButton = document.querySelector("#refreshNotificationDebug");
+  const copyNotificationDebugButton = document.querySelector("#copyNotificationDebug");
+  const clearNotificationDebugButton = document.querySelector("#clearNotificationDebug");
   const notificationInputs = {
     minDurationSeconds: "#notifyMinDurationSeconds",
     barkUrl: "#notifyBarkUrl", serverChanKey: "#notifyServerChanKey", pushPlusToken: "#notifyPushPlusToken",
@@ -23,7 +27,10 @@
   const languageSelect = document.querySelector("#languageSelect");
   const clearDialog = document.querySelector("#clearDialog");
   const clearDialogError = document.querySelector("#clearDialogError");
-  let [settings, state] = await Promise.all([store.getSettings(), store.getState()]);
+  const clearConversationStatsButton = document.querySelector("#clearConversationStats");
+  const conversationStatsList = document.querySelector("#conversationStatsList");
+  const conversationActivePeriods = document.querySelector("#conversationActivePeriods");
+  let [settings, state, conversationStats] = await Promise.all([store.getSettings(), store.getState(), store.getConversationStats()]);
   namespace.i18n.setLanguage(settings.language);
   let saveQueue = Promise.resolve();
   let statusTimer = null;
@@ -46,6 +53,9 @@
   notifyProvider.addEventListener("change", changeNotificationProvider);
   Object.values(notificationInputs).forEach((selector) => document.querySelector(selector).addEventListener("change", saveNotificationConfig));
   testNotificationButton.addEventListener("click", testNotification);
+  refreshNotificationDebugButton.addEventListener("click", loadNotificationDebugLog);
+  copyNotificationDebugButton.addEventListener("click", copyNotificationDebugLog);
+  clearNotificationDebugButton.addEventListener("click", clearNotificationDebugLog);
   launcherToggle.addEventListener("change", () => persistSettings(
     { launcherEnabled: launcherToggle.checked },
     namespace.i18n.t(launcherToggle.checked ? "status.launcherOn" : "status.launcherOff")
@@ -53,6 +63,7 @@
   languageSelect.addEventListener("change", changeLanguage);
   document.querySelector("#domainForm").addEventListener("submit", addDomain);
   document.querySelector("#clear").addEventListener("click", openClearConfirmation);
+  clearConversationStatsButton.addEventListener("click", clearConversationStats);
   document.querySelector("#cancelClear").addEventListener("click", closeClearConfirmation);
   document.querySelector("#confirmClear").addEventListener("click", clearHistory);
   clearDialog.addEventListener("cancel", () => { clearDialogError.textContent = ""; });
@@ -61,9 +72,14 @@
   shortcutDisable.addEventListener("click", disableShortcut);
   renderStats(state);
   applyLanguage();
+  loadNotificationDebugLog();
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes[namespace.STORAGE_KEYS.state]?.newValue) renderStats(changes[namespace.STORAGE_KEYS.state].newValue);
+    if (changes[namespace.STORAGE_KEYS.conversationStats]?.newValue) {
+      conversationStats = namespace.conversationStatsModel.summarize(changes[namespace.STORAGE_KEYS.conversationStats].newValue);
+      renderConversationStats();
+    }
     const next = changes[namespace.STORAGE_KEYS.settings]?.newValue;
     if (!next) return;
     settings = namespace.historyModel.sanitizeSettings(next);
@@ -108,6 +124,7 @@
     namespace.i18n.localize(document);
     languageSelect.value = namespace.i18n.language();
     renderDomains();
+    renderConversationStats();
     if (!capturingShortcut) renderShortcut(settings.shortcut);
   }
 
@@ -205,6 +222,48 @@
       const error = chrome.runtime.lastError;
       error ? reject(error) : resolve(response);
     }));
+  }
+
+  function formatNotificationDebugLog(logs) {
+    if (!Array.isArray(logs) || !logs.length) return namespace.i18n.t("notify.debugEmpty");
+    return logs.slice().reverse().map((entry) => {
+      const time = Number.isFinite(entry.at) ? new Date(entry.at).toLocaleString(namespace.i18n.locale()) : "?";
+      const details = Object.entries(entry)
+        .filter(([key]) => !["at", "traceId", "stage"].includes(key))
+        .map(([key, value]) => `${key}=${value}`).join(" ");
+      return `${time}  ${entry.stage || "event"}${entry.traceId ? `  #${String(entry.traceId).slice(-8)}` : ""}${details ? `\n  ${details}` : ""}`;
+    }).join("\n");
+  }
+
+  async function loadNotificationDebugLog() {
+    try {
+      const result = await runtimeMessage({ type: "AIH_NOTIFICATION_DEBUG_GET" });
+      if (!result?.ok) throw new Error(result?.error || "debug log unavailable");
+      notificationDebugLog.textContent = formatNotificationDebugLog(result.logs);
+    } catch (error) {
+      notificationDebugLog.textContent = error?.message || String(error);
+    }
+  }
+
+  async function copyNotificationDebugLog() {
+    try {
+      await loadNotificationDebugLog();
+      await navigator.clipboard.writeText(notificationDebugLog.textContent || "");
+      showStatus(namespace.i18n.t("notify.debugCopied"));
+    } catch (error) {
+      showStatus(error?.message || namespace.i18n.t("status.saveFailed"), true);
+    }
+  }
+
+  async function clearNotificationDebugLog() {
+    try {
+      const result = await runtimeMessage({ type: "AIH_NOTIFICATION_DEBUG_CLEAR" });
+      if (!result?.ok) throw new Error(result?.error || "debug log clear failed");
+      notificationDebugLog.textContent = namespace.i18n.t("notify.debugEmpty");
+      showStatus(namespace.i18n.t("notify.debugCleared"));
+    } catch (error) {
+      showStatus(error?.message || namespace.i18n.t("status.saveFailed"), true);
+    }
   }
 
   async function testNotification() {
@@ -335,6 +394,77 @@
       chip.appendChild(remove);
       domainList.appendChild(chip);
     });
+  }
+
+  function renderConversationStats() {
+    const all = conversationStats?.all || { total: 0, today: 0, thisWeek: 0, thisMonth: 0, activeDays: 0, activeWeeks: 0, activeMonths: 0 };
+    document.querySelector("#conversationTotal").textContent = all.total;
+    document.querySelector("#conversationToday").textContent = all.today;
+    document.querySelector("#conversationWeek").textContent = all.thisWeek;
+    document.querySelector("#conversationMonth").textContent = all.thisMonth;
+    conversationActivePeriods.textContent = namespace.i18n.t("conversation.active", {
+      days: all.activeDays, weeks: all.activeWeeks, months: all.activeMonths
+    });
+    conversationStatsList.replaceChildren();
+    if (!conversationStats?.rows?.length) {
+      const empty = document.createElement("div");
+      empty.className = "conversation-stat-empty";
+      empty.textContent = namespace.i18n.t("conversation.empty");
+      conversationStatsList.appendChild(empty);
+      return;
+    }
+    conversationStats.rows.forEach((row) => conversationStatsList.appendChild(createConversationStatRow(row)));
+  }
+
+  function createConversationStatRow(row) {
+    const item = document.createElement("div");
+    item.className = "conversation-stat-row";
+    const identity = document.createElement("div");
+    identity.className = "conversation-stat-identity";
+    const name = document.createElement("div");
+    name.className = "conversation-stat-name";
+    const icon = document.createElement("span");
+    const profile = namespace.SiteProfiles.PROFILES.find((entry) => entry.id === row.aiKey);
+    const iconSite = row.site || profile?.domains?.[0] || row.aiKey.replace(/^custom:/, "");
+    icon.innerHTML = namespace.SiteProfiles.icon(iconSite);
+    const label = document.createElement("span");
+    label.textContent = profile ? namespace.SiteProfiles.displayName(iconSite) : (row.site || row.aiKey.replace(/^custom:/, ""));
+    name.appendChild(icon);
+    name.appendChild(label);
+    const active = document.createElement("small");
+    active.className = "conversation-stat-active";
+    active.textContent = namespace.i18n.t("conversation.activeShort", { days: row.activeDays, weeks: row.activeWeeks, months: row.activeMonths });
+    identity.appendChild(name);
+    identity.appendChild(active);
+    item.appendChild(identity);
+    [[row.total, "conversation.totalShort"], [row.today, "conversation.todayShort"], [row.thisWeek, "conversation.weekShort"], [row.thisMonth, "conversation.monthShort"]]
+      .forEach(([value, key]) => item.appendChild(createConversationMetric(value, key)));
+    return item;
+  }
+
+  function createConversationMetric(value, key) {
+    const metric = document.createElement("div");
+    metric.className = "conversation-stat-value";
+    metric.textContent = value;
+    const label = document.createElement("small");
+    label.textContent = namespace.i18n.t(key);
+    metric.appendChild(label);
+    return metric;
+  }
+
+  async function clearConversationStats() {
+    clearConversationStatsButton.disabled = true;
+    try {
+      await store.clearConversationStats();
+      conversationStats = await store.getConversationStats();
+      renderConversationStats();
+      showStatus(namespace.i18n.t("conversation.cleared"));
+    } catch (error) {
+      showStatus(namespace.i18n.t("conversation.clearFailed"), true);
+      console.error(error);
+    } finally {
+      clearConversationStatsButton.disabled = false;
+    }
   }
 
   async function clearHistory() {
