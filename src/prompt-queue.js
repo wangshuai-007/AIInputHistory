@@ -72,9 +72,20 @@
       this.directClickUntil = 0;
       this.directSubmitUntil = 0;
       this.sawPageBusy = false;
+      this.mutatingComposer = false;
       this.drainTimer = null;
       this.host = null;
     }
+
+    setComposerText(input, text) {
+      this.mutatingComposer = true;
+      try {
+        this.adapter.setText(input, text);
+      } finally {
+        this.mutatingComposer = false;
+      }
+    }
+
     async init() {
       if (!this.enabled) return;
       this.items = await this.store.getPromptQueue(this.key);
@@ -168,12 +179,29 @@
         return;
       }
       if (action === "remove") {
-        this.failedIds.delete(id);
-        if (this.dispatchingId === id) this.resetDispatchState();
-        await this.store.removePromptQueueItem(this.key, id);
-        if (this.editingId === id) this.editingId = "";
-        await this.refresh();
+        await this.withdraw(id);
       }
+    }
+
+    async withdraw(id) {
+      await this.syncConversationKey();
+      const item = this.items.find((entry) => entry.id === id);
+      if (!item) return false;
+      this.failedIds.delete(id);
+      if (this.dispatchingId === id) this.resetDispatchState();
+      await this.store.removePromptQueueItem(this.key, id);
+      if (this.editingId === id) this.editingId = "";
+      this.items = await this.store.getPromptQueue(this.key);
+
+      const input = this.getInput?.() || this.adapter.findComposer(document, this.shadow);
+      if (input?.isConnected) {
+        const current = this.adapter.getText(input);
+        const restored = current.trim() ? `${item.text}\n${current}` : item.text;
+        this.setComposerText(input, restored);
+      }
+      this.render();
+      this.scheduleDrain(0);
+      return true;
     }
 
     async sendNow(id) {
@@ -191,7 +219,7 @@
       this.dispatchAttemptAt = 0;
       this.dispatchStartedAt = Date.now();
       this.render();
-      this.adapter.setText(input, item.text);
+      this.setComposerText(input, item.text);
       this.continueDispatch(input, id);
       return true;
     }
@@ -307,7 +335,7 @@
       this.sawPageBusy = this.pageState()?.busy === true;
       const item = await this.store.enqueuePrompt(this.key, text);
       if (!item) return false;
-      this.adapter.setText(input, "");
+      this.setComposerText(input, "");
       this.items = await this.store.getPromptQueue(this.key);
       this.render();
       return true;
@@ -334,7 +362,7 @@
       this.dispatchAttemptAt = 0;
       this.dispatchStartedAt = Date.now();
       this.render();
-      this.adapter.setText(input, item.text);
+      this.setComposerText(input, item.text);
       this.continueDispatch(input, item.id);
     }
 
@@ -356,7 +384,7 @@
       }
       const item = this.items.find((entry) => entry.id === itemId);
       if (!item) return;
-      if (normalizePromptText(this.adapter.getText(input)) !== normalizePromptText(item.text)) this.adapter.setText(input, item.text);
+      if (normalizePromptText(this.adapter.getText(input)) !== normalizePromptText(item.text)) this.setComposerText(input, item.text);
       const button = this.findSendButton(input);
       if (!button) {
         this.scheduleDispatchVerification(input, itemId, 120);
@@ -401,7 +429,7 @@
     markDispatchFailed(input, itemId) {
       if (this.dispatchingId !== itemId) return;
       const currentText = normalizePromptText(this.adapter.getText(input));
-      if (currentText && currentText === normalizePromptText(this.dispatchText)) this.adapter.setText(input, "");
+      if (currentText && currentText === normalizePromptText(this.dispatchText)) this.setComposerText(input, "");
       this.failedIds.add(itemId);
       this.resetDispatchState();
       this.sawPageBusy = false;

@@ -143,6 +143,26 @@ test("异常发送超时会保留失败消息、释放发送锁并允许后续�
   assert.deepEqual((await store.getPromptQueue(queue.key)).map((item) => item.text), ["异常消息", "后续消息"], "失败消息不能被静默删除");
 });
 
+test("撤回 Queue 消息会把内容放回输入框且不丢失已有草稿", async () => {
+  const { store, PromptQueue } = setup();
+  const item = await store.enqueuePrompt("chatgpt.com|/c/test", "撤回的排队内容");
+  let inputText = "当前草稿";
+  const input = { isConnected: true };
+  const adapter = {
+    getText: () => inputText,
+    setText: (_input, value) => { inputText = value; },
+    findComposer: () => input
+  };
+  const queue = new PromptQueue({ store, adapter, getInput: () => input, isRequestActive: () => true });
+  queue.items = await store.getPromptQueue(queue.key);
+  queue.render = () => {};
+  queue.scheduleDrain = () => {};
+
+  assert.equal(await queue.withdraw(item.id), true);
+  assert.equal((await store.getPromptQueue(queue.key)).length, 0);
+  assert.equal(inputText, "撤回的排队内容\n当前草稿", "撤回内容应回到输入框，同时保留原有草稿");
+});
+
 test("立即发送可绕过旧请求等待状态，直接启动指定 Queue 项", async () => {
   const { store, PromptQueue, namespace } = setup();
   namespace.requestTimingModel = { sampleChatGPT: () => ({ busy: false, replies: [{ complete: true }] }) };

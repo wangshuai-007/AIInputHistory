@@ -39,7 +39,7 @@ test("上下键像 Console 一样连续切换历史并在向下越界时恢复�
   assert.equal(input.value, "正在编辑");
 });
 
-test("历史轮换后用户编辑文本会中断本次上下键历史导航", async () => {
+test("历史轮换后用户编辑只重置当前游标，下一次仍可重新浏览历史", async () => {
   const context = { globalThis: {} };
   vm.runInNewContext(source, context);
   const input = { value: "草稿" };
@@ -52,13 +52,11 @@ test("历史轮换后用户编辑文本会中断本次上下键历史导航", as
   assert.equal(input.value, "历史一");
   input.value = "历史一，继续编辑";
   assert.equal(navigator.interrupt(), true);
-  assert.equal(navigator.canMove(), false);
-  assert.equal(await navigator.move("up", input, composition), false);
-  assert.equal(await navigator.move("down", input, composition), false);
-  assert.equal(input.value, "历史一，继续编辑");
-
-  navigator.reset();
   assert.equal(navigator.canMove(), true);
+  assert.equal(await navigator.move("up", input, composition), true);
+  assert.equal(input.value, "历史一");
+  assert.equal(await navigator.move("down", input, composition), true);
+  assert.equal(input.value, "历史一，继续编辑", "向下越界应恢复编辑后的当前草稿");
 });
 
 test("快速上下键共享首次加载且按按键顺序恢复原文", async () => {

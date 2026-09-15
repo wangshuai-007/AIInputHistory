@@ -156,8 +156,11 @@
     if (!activeInput?.isConnected) handleFocus(event);
     if (adapter.resolveEventEditable(event) !== activeInput) return;
     if (historyNavigator.isApplying()) return;
-    if (!adapter.getText(activeInput).trim()) lastSnapshotText = "";
-    historyNavigator.isBrowsing() ? historyNavigator.interrupt() : historyNavigator.reset();
+    const currentText = adapter.getText(activeInput);
+    if (!currentText.trim()) lastSnapshotText = "";
+    // Queue 的填充/清空只改变编辑框内容，不应改变上下键历史游标。
+    // 用户真实输入则以当前文本作为新的草稿起点，结束旧游标但绝不禁用历史导航。
+    if (promptQueue?.mutatingComposer !== true) historyNavigator.reset();
     clearTimeout(draftTimer);
     draftTimer = setTimeout(saveDraft, 500);
     promptQueue?.scheduleDrain?.(120);

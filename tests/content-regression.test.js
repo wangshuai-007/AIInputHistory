@@ -72,17 +72,17 @@ async function setup() {
     },
     HistoryNavigator: class {
       constructor() { h.historyNavigator = this; this.reset(); this.moves = 0; this.interrupts = 0; }
-      reset() { this.browsing = false; this.blocked = false; }
+      reset() { this.browsing = false; }
       isApplying() { return false; }
       isBrowsing() { return this.browsing; }
-      canMove() { return !this.blocked; }
+      canMove() { return true; }
       interrupt() {
-        if (!this.browsing && !this.blocked) return false;
-        this.blocked = true;
+        if (!this.browsing) return false;
+        this.browsing = false;
         this.interrupts += 1;
         return true;
       }
-      async move() { if (this.blocked) return false; this.browsing = true; this.moves += 1; return true; }
+      async move() { this.browsing = true; this.moves += 1; return true; }
     },
     SendDetector: class {
       constructor(adapter, onSend) { this.onSend = onSend; }
@@ -90,6 +90,18 @@ async function setup() {
       handlePointerDown() {}
       watchEnter() {}
       cancelEnter() {}
+    },
+    promptQueueModel: { supportedSite: () => true },
+    PromptQueue: class {
+      constructor() { h.promptQueue = this; this.mutatingComposer = false; this.host = {}; this.shadow = {}; }
+      async init() {}
+      interceptKeydown() { return false; }
+      interceptSubmit() { return false; }
+      interceptSendControl() { return false; }
+      suppressAutoDispatchRecord() { return false; }
+      scheduleDrain() {}
+      onRequestFinished() {}
+      async confirmRecordedSend() { return false; }
     }
   };
   await vm.runInNewContext(source, context);
@@ -189,35 +201,62 @@ test("上下键只在光标到达首尾行边界时切换历史", async () => {
   assert.equal(h.historyNavigator.moves, 1);
 });
 
-test("历史轮换后手动编辑文本会把上下键交还给输入框", async () => {
+test("历史轮换后再次输入只重置游标，不会禁用后续上下历史切换", async () => {
   const h = await setup();
   const first = h.event("keydown", { key: "ArrowUp" });
   assert.equal(first.defaultPrevented, true);
-  assert.equal(first.propagationStopped, true, "历史切换时不能让同一个方向键继续交给页面处理");
   assert.equal(h.historyNavigator.moves, 1);
 
-  h.composer.text = "编辑过的历史内容";
+  h.composer.text = "手动输入的新内容";
   h.event("input");
-  assert.equal(h.historyNavigator.canMove(), false);
+  assert.equal(h.historyNavigator.canMove(), true);
+  assert.equal(h.historyNavigator.isBrowsing(), false, "用户输入后只应结束旧的历史游标");
+
+  h.caretCanMove = false;
   const next = h.event("keydown", { key: "ArrowUp" });
-  assert.equal(next.defaultPrevented, undefined, "中断后要保留浏览器原生光标上下移动");
-  assert.equal(next.propagationStopped, true, "中断后仍不能让方向键泄漏给 ChatGPT 快捷键处理");
-  assert.equal(h.historyNavigator.moves, 1);
+  assert.equal(next.defaultPrevented, true, "新输入后到达首行仍应立即重新浏览历史");
+  assert.equal(h.historyNavigator.moves, 2);
 });
 
-test("历史轮换后键盘或鼠标移动光标会恢复原生上下行移动", async () => {
+test("Queue 连续清空输入框时保留历史游标，可继续选择第三条及更老历史", async () => {
+  const h = await setup();
+  h.caretCanMove = false;
+
+  h.event("keydown", { key: "ArrowUp" });
+  assert.equal(h.historyNavigator.moves, 1);
+  assert.equal(h.historyNavigator.canMove(), true);
+
+  for (const expectedMoves of [2, 3]) {
+    h.promptQueue.mutatingComposer = true;
+    h.composer.text = "";
+    h.event("input");
+    h.promptQueue.mutatingComposer = false;
+    assert.equal(h.historyNavigator.isBrowsing(), true, "Queue 内部清空不能改变当前历史游标");
+
+    const next = h.event("keydown", { key: "ArrowUp" });
+    assert.equal(next.defaultPrevented, true);
+    assert.equal(h.historyNavigator.moves, expectedMoves, `应能继续选择第 ${expectedMoves} 条历史`);
+  }
+
+  h.composer.text = "";
+  h.event("input");
+  assert.equal(h.historyNavigator.canMove(), true, "用户普通清空仍应开始新的历史导航");
+});
+
+test("历史轮换后移动光标只重置游标，边界方向键仍可重新浏览历史", async () => {
   for (const moveCaret of [
     (h) => h.event("keydown", { key: "ArrowLeft" }),
     (h) => h.event("pointerdown", { composedPath: () => [h.composer] })
   ]) {
     const h = await setup();
+    h.caretCanMove = false;
     h.event("keydown", { key: "ArrowUp" });
     moveCaret(h);
-    assert.equal(h.historyNavigator.canMove(), false);
-    const next = h.event("keydown", { key: "ArrowDown" });
-    assert.equal(next.defaultPrevented, undefined);
-    assert.equal(next.propagationStopped, true);
-    assert.equal(h.historyNavigator.moves, 1);
+    assert.equal(h.historyNavigator.canMove(), true);
+    assert.equal(h.historyNavigator.isBrowsing(), false, "移动光标应结束旧游标而不是禁用历史");
+    const next = h.event("keydown", { key: "ArrowUp" });
+    assert.equal(next.defaultPrevented, true);
+    assert.equal(h.historyNavigator.moves, 2);
   }
 });
 

@@ -14,7 +14,6 @@
       this.original = "";
       this.applying = false;
       this.loading = null;
-      this.interrupted = false;
       this.loadRevision = (this.loadRevision || 0) + 1;
     }
 
@@ -27,15 +26,12 @@
     }
 
     canMove() {
-      return this.interrupted !== true;
+      return true;
     }
 
     interrupt() {
-      if (this.interrupted) return true;
       if (!this.isBrowsing()) return false;
-      this.interrupted = true;
-      this.loadRevision += 1;
-      this.loading = null;
+      this.reset();
       return true;
     }
 

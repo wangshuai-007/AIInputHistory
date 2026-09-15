@@ -22,7 +22,7 @@ Key features:
 - Add other AI domains manually;
 - English and Chinese interfaces, dark mode, custom shortcuts, and a movable floating button; right-click an active timer to stop a stuck observation;
 - Track total conversations, today, this week, this month, and cumulative active days/weeks/months separately for each AI, with an independent clear action;
-- Queue prompts while ChatGPT is replying, with edit, remove, and Send now actions; queued prompts send in order after the previous reply completes, and failed items do not permanently block later prompts;
+- Queue prompts while ChatGPT is replying, with edit, withdraw, and Send now actions; withdrawing restores the prompt to the composer, and Queue actions do not disable Up/Down history navigation; queued prompts send in order after the previous reply completes, and failed items do not permanently block later prompts;
 - Track ChatGPT send-to-completion duration and optionally notify when a reply completes;
 - Filter automatic completion notifications by minimum duration (20 seconds by default) and inspect a local redacted debug log for notification troubleshooting;
 - Notifications support browser/system notifications, Bark, ServerChan, PushPlus, ntfy, Gotify, DingTalk, Feishu, WeCom robots, and custom HTTP requests;

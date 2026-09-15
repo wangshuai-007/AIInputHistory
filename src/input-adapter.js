@@ -128,15 +128,25 @@
     if (!selection?.rangeCount || !selection.isCollapsed || !element.contains(selection.anchorNode)) return true;
     if (typeof selection.modify !== "function") return fallbackContentEditableBoundary(element, selection, direction);
     const original = selection.getRangeAt(0).cloneRange();
+    const beforeTop = contentEditableCaretTop(original);
     const beforeNode = selection.anchorNode;
     const beforeOffset = selection.anchorOffset;
     try {
       selection.modify("move", direction === "up" ? "backward" : "forward", "line");
+      const afterTop = selection.rangeCount ? contentEditableCaretTop(selection.getRangeAt(0)) : NaN;
+      if (Number.isFinite(beforeTop) && Number.isFinite(afterTop)) {
+        return direction === "up" ? afterTop < beforeTop - 1 : afterTop > beforeTop + 1;
+      }
       return selection.anchorNode !== beforeNode || selection.anchorOffset !== beforeOffset;
     } finally {
       selection.removeAllRanges();
       selection.addRange(original);
     }
+  }
+
+  function contentEditableCaretTop(range) {
+    const rect = range.getClientRects?.()[0] || range.getBoundingClientRect?.();
+    return rect && Number.isFinite(rect.top) ? rect.top : NaN;
   }
 
   function fallbackContentEditableBoundary(element, selection, direction) {

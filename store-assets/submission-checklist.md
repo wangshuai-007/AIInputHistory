@@ -2,7 +2,7 @@
 
 ## 已准备文件
 
-- 扩展上传包：`dist/ai-input-history-1.31.0.zip`
+- 扩展上传包：`dist/ai-input-history-1.31.1.zip`
 - 商店图标：`store-assets/store-icon-128.png`
 - 小型宣传图：`store-assets/promo-small-440x280.png`
 - Marquee 宣传图：`store-assets/promo-marquee-1400x560.png`
