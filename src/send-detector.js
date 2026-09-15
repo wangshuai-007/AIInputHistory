@@ -2,7 +2,7 @@
   "use strict";
 
   const SEND_PATTERN = /(^|\b)(send|submit|send message|send-message)(\b|$)|发送|提交|发送消息/i;
-  const EXCLUDE_PATTERN = /stop|cancel|abort|停止|取消/i;
+  const EXCLUDE_PATTERN = /stop|cancel|abort|voice|microphone|\bmic\b|dictat|audio|speech|停止|取消|语音|麦克风/i;
 
   function didComposerClear(before, after, connected = true) {
     return Boolean(connected && String(before || "").trim()) && !String(after || "").trim();

@@ -39,6 +39,8 @@
       this.list = this.shadow.querySelector(".list");
       this.savedStatus = this.shadow.querySelector(".saved-status");
       this.launcherTooltip = this.shadow.querySelector(".launcher-tooltip");
+      this.launcherMenu = this.shadow.querySelector(".launcher-menu");
+      this.stopTimingHandler = null;
       this.timingView = new namespace.RequestTimingView(this);
       this.clearConfirmation = new namespace.ClearConfirmation(this.shadow, () => this.clearHistory());
       this.bindEvents();
@@ -53,6 +55,10 @@
         <span class="saved-status sr-only" aria-live="polite"></span>
         <span class="launcher-tooltip" id="aih-last-saved" role="tooltip" data-i18n="panel.neverSaved">尚未自动保存</span>
       </button>
+      <div class="launcher-menu hidden" role="menu">
+        <button type="button" role="menuitem" data-launcher-action="hide" data-i18n="launcher.hide">隐藏悬浮按钮</button>
+        <button type="button" role="menuitem" data-launcher-action="stop" data-i18n="timing.stop">停止计时</button>
+      </div>
       <section class="panel hidden" role="dialog" data-i18n-aria-label="panel.aria" aria-label="输入历史">
         <header class="head"><div class="title-row"><div><span class="title" data-i18n="panel.title">输入历史</span><span class="hint" data-i18n="panel.dragHint">拖动标题移动</span></div><div class="actions">
           <button class="icon-button clear" type="button" data-i18n-aria-label="panel.clearAria" data-i18n-title="panel.clearAria" aria-label="一键清除全部历史" title="一键清除全部历史"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -89,8 +95,25 @@
       });
       this.launcher.addEventListener("contextmenu", (event) => {
         event.preventDefault();
-        this.disableLauncher().catch((error) => this.reportError(error));
+        this.openLauncherMenu(event.clientX, event.clientY);
       });
+      this.launcherMenu.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-launcher-action]");
+        if (!button) return;
+        this.closeLauncherMenu();
+        if (button.dataset.launcherAction === "hide") {
+          this.disableLauncher().catch((error) => this.reportError(error));
+          return;
+        }
+        if (button.dataset.launcherAction === "stop" && this.timingView.active) this.stopTimingHandler?.();
+      });
+      this.shadow.addEventListener("pointerdown", (event) => {
+        const path = event.composedPath();
+        if (!path.includes(this.launcherMenu) && !path.includes(this.launcher)) this.closeLauncherMenu();
+      }, true);
+      document.addEventListener("pointerdown", (event) => {
+        if (!event.composedPath().includes(this.host)) this.closeLauncherMenu();
+      }, true);
       this.launcher.addEventListener("pointerenter", () => this.positionLauncherTooltip());
       this.launcher.addEventListener("focus", () => this.positionLauncherTooltip());
       this.shadow.querySelector(".close").addEventListener("click", () => this.close());
@@ -181,7 +204,31 @@
       this.launcherTooltip.style.maxWidth = availableWidth;
     }
 
+    setStopTimingHandler(handler) {
+      this.stopTimingHandler = typeof handler === "function" ? handler : null;
+      this.syncLauncherMenu();
+    }
+
+    syncLauncherMenu() {
+      const stop = this.launcherMenu?.querySelector('[data-launcher-action="stop"]');
+      if (stop) stop.disabled = !this.timingView?.active;
+    }
+
+    openLauncherMenu(x, y) {
+      this.syncLauncherMenu();
+      this.launcherMenu.classList.remove("hidden");
+      const rect = this.launcherMenu.getBoundingClientRect();
+      const left = Math.max(8, Math.min(window.innerWidth - rect.width - 8, x));
+      const top = Math.max(8, Math.min(window.innerHeight - rect.height - 8, y));
+      Object.assign(this.launcherMenu.style, { left: `${left}px`, top: `${top}px` });
+    }
+
+    closeLauncherMenu() {
+      this.launcherMenu?.classList.add("hidden");
+    }
+
     async disableLauncher() {
+      this.closeLauncherMenu();
       await this.store.patchSettings({ launcherEnabled: false });
       this.setLauncherEnabled(false);
     }

@@ -38,3 +38,6 @@ CSS 变量 --bg/--surface/--line/--text/--muted/--accent/--accent-strong；深�
 
 ## 实现备注
 面板 CSS 位于 src/history-panel-style.js，交互位于 src/history-panel.js；使用本地截图夹具验证实际组件。
+
+## 版本发布与文档同步
+每次进行版本 commit 前，必须先同步该版本对应文档，禁止只修改代码和版本号。至少检查并按实际改动更新 README、`docs/` 中相关功能说明、Chrome Web Store 双语文案与 `store-assets/submission-checklist.md`；新增较大功能时应新增或补充专项文档并从 README 链接。版本号必须同步更新 `package.json`、`manifest.json`、截图/发布脚本中的演示版本以及提交清单中的 ZIP 文件名。完成文档更新后再执行测试、构建和版本 commit。

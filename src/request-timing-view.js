@@ -16,6 +16,7 @@
     update(elapsedMs) {
       this.active = elapsedMs !== null;
       this.panel.launcher.classList.toggle("timing-active", this.active);
+      this.panel.syncLauncherMenu?.();
       if (this.active) {
         this.panel.launcher.classList.remove("aih-saved");
         const seconds = Math.floor(elapsedMs / 1000);

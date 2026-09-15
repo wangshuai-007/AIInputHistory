@@ -111,7 +111,7 @@ const popupMock = `(() => {
     aiInputHistoryState: { entries: [], drafts: {}, positions: {}, siteIcons: {} }
   };
   globalThis.chrome = {
-    runtime: { lastError: null, getManifest: () => ({ version: "1.30.0" }), sendMessage: (_message, callback) => callback?.({ ok: true }) },
+    runtime: { lastError: null, getManifest: () => ({ version: "1.31.0" }), sendMessage: (_message, callback) => callback?.({ ok: true }) },
     permissions: { request: (_request, callback) => callback(true) },
     storage: {
       onChanged: { addListener(listener) { listeners.push(listener); } },

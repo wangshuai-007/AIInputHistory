@@ -38,6 +38,7 @@
         requestId: `${site}:${observation.startedAt}:${Math.random().toString(16).slice(2)}`,
         site, startedAt: observation.startedAt, path: observation.baseline.path,
         known: new Set(observation.baseline.replies.map((reply) => reply.key)),
+        knownSignatures: new Set(observation.baseline.replies.map(replySignature)),
         knownErrors: new Set(observation.baseline.errors || []), sawReply: false, sawBusy: observation.baseline.busy === true,
         quietSince: null, replyActivity: null, entryId: null, result: null,
         notificationEligible: true, restored: false,
@@ -77,6 +78,7 @@
         requestId: saved.requestId,
         site, startedAt: saved.startedAt, path: current.path,
         known: new Set(Array.isArray(saved.known) ? saved.known : []),
+        knownSignatures: new Set(Array.isArray(saved.knownSignatures) ? saved.knownSignatures : []),
         knownErrors: new Set(Array.isArray(saved.knownErrors) ? saved.knownErrors : []),
         sawReply: saved.sawReply === true, sawBusy: saved.sawBusy === true,
         quietSince: null, replyActivity: null, entryId: saved.entryId || null, result: null,
@@ -99,6 +101,7 @@
         requestId: request.requestId,
         site: request.site, startedAt: request.startedAt, path: request.path,
         known: [...request.known].filter((value) => typeof value === "string"),
+        knownSignatures: [...request.knownSignatures].filter((value) => typeof value === "string"),
         knownErrors: [...request.knownErrors].filter((value) => typeof value === "string"),
         sawReply: request.sawReply === true, sawBusy: request.sawBusy === true, entryId: request.entryId || null,
         adoptedPath: request.adoptedPath === true, completionContext: { ...request.completionContext }
@@ -122,7 +125,7 @@
       if ((state.errors || []).some((key) => !request.knownErrors.has(key))) { this.finish("failed"); return; }
       if (elapsed >= 30 * 60 * 1000) { this.finish("timeout"); return; }
       this.onTick(elapsed);
-      const replies = state.replies.filter((reply) => !request.known.has(reply.key));
+      const replies = state.replies.filter((reply) => !request.known.has(reply.key) || !request.knownSignatures.has(replySignature(reply)));
       const sawReplyBefore = request.sawReply;
       const sawBusyBefore = request.sawBusy;
       if (request.restored && state.busy === true) request.notificationEligible = true;
@@ -213,6 +216,20 @@
     return Boolean(element?.getClientRects().length && getComputedStyle(element).visibility !== "hidden");
   }
 
+  function replySignature(reply) {
+    return `${reply?.key || ""}|${reply?.activity || ""}`;
+  }
+
+  function textFingerprint(value) {
+    const text = String(value || "");
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `${text.length}:${(hash >>> 0).toString(36)}`;
+  }
+
   function observeChatGPT(callback) {
     if (typeof MutationObserver !== "function" || !document?.documentElement) return null;
     const observer = new MutationObserver(() => callback());
@@ -237,9 +254,14 @@
       const turn = node.closest('article,[data-testid^="conversation-turn-"]') || node;
       const ordinal = assistantNodes.indexOf(node);
       const key = node.getAttribute("data-message-id") || turn.getAttribute?.("data-testid") || `assistant-index:${ordinal}`;
-      const complete = [...turn.querySelectorAll('[data-testid="copy-turn-action-button"],[data-testid="good-response-turn-action-button"],[data-testid="bad-response-turn-action-button"]')].some(visible);
+      const actionControls = [...turn.querySelectorAll("button,[role='button']")].filter((control) => !node.contains(control) && visible(control));
+      const complete = actionControls.some((control) => {
+        const signal = [control.getAttribute("data-testid"), control.getAttribute("aria-label"), control.getAttribute("title"), control.textContent]
+          .filter(Boolean).join(" ");
+        return /(copy.*(turn|response)|good.*response|bad.*response|thumb|regenerate|retry|复制|赞|踩|重新生成|重试)/i.test(signal);
+      });
       const text = node.textContent.trim();
-      const activity = `${text.length}:${turn.querySelectorAll("*").length}`;
+      const activity = textFingerprint(text);
       return { key, nonempty: Boolean(text), complete, activity };
     });
     const errors = [...scope.querySelectorAll('[data-testid="conversation-turn-error"]')].filter(visible)

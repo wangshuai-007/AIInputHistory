@@ -87,6 +87,12 @@ Body：{"title":"{{title}}","message":"{{message}}","duration":"{{duration}}"}
 
 所有外部请求由扩展 Service Worker 发出，设置 `credentials: omit` 和 `referrerPolicy: no-referrer`，不会主动附带目标网站的 Cookie 或 ChatGPT 页面 Referer。
 
+## 通知调试日志
+
+设置页提供本地“通知调试日志”，用于排查完成事件是否被检测、最低耗时是否拦截、最终解析到的通知渠道以及 HTTP/浏览器通知结果。日志会记录类似 `provider`、`deliveryKind`、HTTP 状态、页面可见性和完成检测触发方式，不记录问题正文、GPT 回复、Webhook、Token 等敏感内容，并只保留最近约 100 条，可刷新、复制或清空。
+
+回复完成检测同时使用 DOM 变化监听与定时采样。后台标签页的普通定时器被浏览器降频时，ChatGPT 回复 DOM 的变化仍可触发完成检查；如果标签页被浏览器完全丢弃（discard）或浏览器完全退出，则页面脚本无法继续观察。
+
 ## 测试配置
 
 设置页提供“发送测试通知”按钮。测试通知使用固定测试文本，不会读取当前 ChatGPT 对话内容；按钮也会触发当前通知方式需要的可选权限申请。

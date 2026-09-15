@@ -18,6 +18,7 @@
   let conversationStatsTimer = null;
   let conversationStatsFallbackSessionId = makeSessionId();
   let lastConversationStat = null;
+  let promptQueue = null;
 
   window.addEventListener("keydown", handleHistoryArrowKeydown, true);
 
@@ -26,6 +27,7 @@
   let liveSettings = settings;
   if (!namespace.SiteProfiles.isAllowedSite(location.hostname, settings.customDomains)) return;
   namespace.SiteProfiles.setSiteIcons(await store.getSiteIcons());
+  const queueSupported = namespace.promptQueueModel?.supportedSite(location.hostname) === true;
 
   const panel = new namespace.HistoryPanel(
     store,
@@ -45,8 +47,23 @@
     onComplete: notifyRequestCompleted,
     session: timingSession
   });
-  requestTiming.setEnabled(settings.trackRequestTime || settings.completionNotification?.enabled === true);
+  panel.setStopTimingHandler?.(() => {
+    if (!requestTiming.active) return;
+    requestTiming.finish("cancelled");
+    promptQueue?.onRequestFinished?.({ status: "cancelled", manual: true });
+  });
+  requestTiming.setEnabled(queueSupported || settings.trackRequestTime || settings.completionNotification?.enabled === true);
   await requestTiming.restore(location.hostname);
+  if (queueSupported && typeof namespace.PromptQueue === "function") {
+    promptQueue = new namespace.PromptQueue({
+      store,
+      adapter,
+      getInput: () => activeInput?.isConnected ? activeInput : adapter.findComposer(document, [panel.host, promptQueue?.shadow]),
+      isRequestActive: () => Boolean(requestTiming.active),
+      getRequestStartedAt: () => requestTiming.active?.startedAt || 0
+    });
+    await promptQueue.init();
+  }
   namespace.captureSiteIcon(store, location.hostname).then(async (dataUrl) => {
     if (!dataUrl) return;
     namespace.SiteProfiles.setSiteIcons(await store.getSiteIcons());
@@ -58,7 +75,7 @@
     const nextSettings = changes[namespace.STORAGE_KEYS.settings]?.newValue;
     if (nextSettings) {
       liveSettings = namespace.historyModel.sanitizeSettings(nextSettings);
-      requestTiming.setEnabled(liveSettings.trackRequestTime || liveSettings.completionNotification?.enabled === true);
+      requestTiming.setEnabled(queueSupported || liveSettings.trackRequestTime || liveSettings.completionNotification?.enabled === true);
       panel.setLauncherEnabled(nextSettings.launcherEnabled !== false);
       if (liveSettings.launcherEnabled) discoverComposer();
       if (changes[namespace.STORAGE_KEYS.settings]?.oldValue?.language !== liveSettings.language) panel.setLanguage(liveSettings.language);
@@ -103,12 +120,12 @@
   discoverComposer();
 
   function discoverComposer() {
-    const candidate = adapter.findComposer(document, panel.host);
+    const candidate = adapter.findComposer(document, [panel.host, promptQueue?.shadow]);
     if (candidate) activate(candidate);
   }
 
   function handleFocus(event) {
-    if (event.composedPath().includes(panel.host)) return;
+    if (event.composedPath().includes(panel.host) || event.composedPath().includes(promptQueue?.host)) return;
     const candidate = adapter.resolveEventEditable(event);
     if (!adapter.isEditable(candidate) || adapter.composerScore(candidate) < 4) return;
     activate(candidate);
@@ -135,7 +152,7 @@
   }
 
   function handleInput(event) {
-    if (event.composedPath().includes(panel.host)) return;
+    if (event.composedPath().includes(panel.host) || event.composedPath().includes(promptQueue?.host)) return;
     if (!activeInput?.isConnected) handleFocus(event);
     if (adapter.resolveEventEditable(event) !== activeInput) return;
     if (historyNavigator.isApplying()) return;
@@ -143,6 +160,7 @@
     historyNavigator.isBrowsing() ? historyNavigator.interrupt() : historyNavigator.reset();
     clearTimeout(draftTimer);
     draftTimer = setTimeout(saveDraft, 500);
+    promptQueue?.scheduleDrain?.(120);
   }
 
   function saveDraft() {
@@ -182,6 +200,7 @@
   }
 
   function notifyRequestCompleted(result) {
+    promptQueue?.onRequestFinished?.(result);
     const enabled = liveSettings.completionNotification?.enabled === true;
     const eligible = result?.notificationEligible !== false;
     appendNotificationDebug("completion-detected", {
@@ -233,6 +252,7 @@
       activeContext = { ...context, sessionId: makeSessionId() };
     }
     const tracking = startRequestTiming(context, metadata);
+    promptQueue?.confirmRecordedSend?.(text).catch((error) => console.warn("[AI 输入历史] 确认排队发送失败", error));
     const sendContext = { ...context, sentAt: metadata.sentAt || Date.now(), trackRequestTime: liveSettings.trackRequestTime && Boolean(tracking) };
     return queueRecord(async () => {
       try {
@@ -290,6 +310,7 @@
   }
 
   function handleSubmit(event) {
+    if (promptQueue?.interceptSubmit?.(event, activeInput)) return;
     sendDetector.handleSubmit(event, activeInput, activeContext);
   }
 
@@ -301,6 +322,8 @@
       sendDetector.cancelEnter();
       requestTiming.finish("cancelled");
     }
+    if (promptQueue?.interceptSendControl?.(event, activeInput)) return;
+    if (promptQueue?.suppressAutoDispatchRecord?.()) return;
     sendDetector.handlePointerDown(event, activeInput, activeContext);
   }
 
@@ -324,6 +347,7 @@
     if (panel.isOpen() && handlePanelKeydown(event)) return;
 
     if (!activeInput || adapter.resolveEventEditable(event) !== activeInput) return;
+    if (promptQueue?.interceptKeydown?.(event, activeInput)) return;
     if (namespace.historyModel.matchesShortcut(event, liveSettings.shortcut)) {
       event.preventDefault();
       event.stopImmediatePropagation();

@@ -31,10 +31,11 @@
 
   /** Finds an existing visible composer without changing page focus. */
   function findComposer(root = document, excludedHost = null) {
+    const excluded = (Array.isArray(excludedHost) ? excludedHost : [excludedHost]).filter(Boolean);
     let focused = root.activeElement;
     while (focused?.shadowRoot?.activeElement) focused = focused.shadowRoot.activeElement;
     const candidates = [focused, ...root.querySelectorAll(EDITABLE_SELECTOR)];
-    return candidates.filter((element) => element && element !== excludedHost && !excludedHost?.contains(element))
+    return candidates.filter((element) => element && !excluded.some((host) => element === host || host.contains?.(element)))
       .map((element) => ({ element, score: composerScore(element) }))
       .filter(({ element, score }) => {
         const rect = element.getBoundingClientRect();

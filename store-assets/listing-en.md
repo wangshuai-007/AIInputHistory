@@ -20,9 +20,11 @@ Key features:
 - Filter by site, search full text, or show only sent entries;
 - Built-in support for ChatGPT, Claude, Gemini, Grok, DeepSeek, Copilot, Perplexity, Kimi, Doubao, Qwen, GLM, and other popular AI sites;
 - Add other AI domains manually;
-- English and Chinese interfaces, dark mode, custom shortcuts, and a movable floating button;
+- English and Chinese interfaces, dark mode, custom shortcuts, and a movable floating button; right-click an active timer to stop a stuck observation;
+- Track total conversations, today, this week, this month, and cumulative active days/weeks/months separately for each AI, with an independent clear action;
+- Queue prompts while ChatGPT is replying, with edit, remove, and Send now actions; queued prompts send in order after the previous reply completes, and failed items do not permanently block later prompts;
 - Track ChatGPT send-to-completion duration and optionally notify when a reply completes;
-- Filter automatic completion notifications by minimum duration (20 seconds by default), so fast replies do not interrupt you;
+- Filter automatic completion notifications by minimum duration (20 seconds by default) and inspect a local redacted debug log for notification troubleshooting;
 - Notifications support browser/system notifications, Bark, ServerChan, PushPlus, ntfy, Gotify, DingTalk, Feishu, WeCom robots, and custom HTTP requests;
 - Clear all local history with an explicit confirmation step.
 

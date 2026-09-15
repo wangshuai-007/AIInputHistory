@@ -2,7 +2,7 @@
 
 ## 已准备文件
 
-- 扩展上传包：`dist/ai-input-history-1.30.0.zip`
+- 扩展上传包：`dist/ai-input-history-1.31.0.zip`
 - 商店图标：`store-assets/store-icon-128.png`
 - 小型宣传图：`store-assets/promo-small-440x280.png`
 - Marquee 宣传图：`store-assets/promo-marquee-1400x560.png`
@@ -22,7 +22,7 @@ Save and restore text the user enters into AI chat composers using browser-local
 
 ### `storage` 权限说明
 
-Stores user-created prompt history, drafts, settings, cached site icons, and floating-interface positions locally in the browser. No history is sent to a developer server.
+Stores user-created prompt history, drafts, ChatGPT queued prompts, per-AI conversation statistics, redacted notification debug logs, settings, cached site icons, and floating-interface positions locally in the browser. No history is sent to a developer server.
 
 ### `notifications` 权限说明
 

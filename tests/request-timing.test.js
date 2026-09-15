@@ -65,6 +65,19 @@ test('旧回复和首字输出不能标为本次回复完成', () => {
   h.tracker.finish('cancelled');
 });
 
+test('长会话中 assistant 序号复用时，内容指纹变化仍识别为本次新回复', () => {
+  const h = setup();
+  h.sample.replies = [{ key: 'assistant-index:2', nonempty: true, complete: true, activity: 'old:1' }];
+  h.tracker.attach(h.start(), 'entry');
+  h.sample = { ...h.sample, busy: true, replies: [{ key: 'assistant-index:2', nonempty: true, complete: false, activity: 'new:1' }] };
+  h.now = 3000; h.tracker.tick();
+  assert.equal(h.tracker.active.sawReply, true, '相同 key 但内容指纹变化应视为新回复');
+  h.sample = { ...h.sample, busy: false, ready: false, replies: [{ key: 'assistant-index:2', nonempty: true, complete: true, activity: 'new:final' }] };
+  h.now = 5000; h.tracker.tick('mutation');
+  assert.equal(h.writes.length, 1);
+  assert.equal(h.writes[0].status, 'completed');
+});
+
 test('完成早于记录落库时，挂接后仍能正确保存', () => {
   const h = setup();
   const request = h.start(); h.complete();

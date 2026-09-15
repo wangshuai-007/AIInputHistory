@@ -17,6 +17,10 @@
     .launcher.aih-dragging { cursor:grabbing; transform:scale(1.05); }
     .launcher:focus-visible,.icon-button:focus-visible,.filter:focus-visible,.item:focus-visible,input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     .launcher svg { width:18px; height:18px; }
+    .launcher-menu { position:fixed; z-index:2147483647; min-width:132px; padding:5px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--text); box-shadow:0 12px 32px rgba(0,0,0,.34); }
+    .launcher-menu button { width:100%; border:0; border-radius:7px; padding:7px 10px; background:transparent; color:var(--text); text-align:left; cursor:pointer; font-size:12px; }
+    .launcher-menu button:hover:not(:disabled) { background:var(--surface); }
+    .launcher-menu button:disabled { opacity:.42; cursor:default; }
     .panel { position:fixed; z-index:2147483647; width:min(400px,calc(100vw - 24px)); max-height:min(560px,72vh); background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:18px; box-shadow:0 22px 60px rgba(0,0,0,.42); overflow:hidden; display:flex; flex-direction:column; animation:aih-in .16s ease-out; }
     .panel.site-menu-open { overflow:visible; }
     .hidden { display:none; } .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }

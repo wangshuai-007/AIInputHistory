@@ -13,7 +13,7 @@ function setup(entries = [], drafts = {}) {
   } } } };
   sandbox.globalThis = sandbox;
   vm.runInNewContext(source, sandbox);
-  return { store: new sandbox.AIInputHistory.HistoryStore(), model: sandbox.AIInputHistory.historyModel };
+  return { store: new sandbox.AIInputHistory.HistoryStore(), model: sandbox.AIInputHistory.historyModel, data };
 }
 
 test("固定消息不占缓存限额且不被发送合并隐藏", () => {
@@ -24,6 +24,29 @@ test("固定消息不占缓存限额且不被发送合并隐藏", () => {
   assert.ok(model.collapseSnapshotsForSend([pinned], "f", "s").length);
   assert.equal(model.compactSentSnapshots([pinned, { kind: "send", sessionId: "s" }]).length, 2);
   assert.equal(model.pruneEntries([{ ...pinned, kind: "send" }, { kind: "send", createdAt: 99 }], { sendLimit: 1 }).length, 2);
+});
+
+test("固定状态写入独立索引，历史对象漏掉 pinned 字段后仍能恢复", async () => {
+  const entry = { id: "1", text: "长期保留", site: "a", kind: "send", createdAt: 1 };
+  const { store, data } = setup([entry]);
+  await store.setPinned(entry, true);
+  assert.equal(data.aiInputHistoryPinnedIndex["1"], true);
+
+  data.aiInputHistoryState.entries[0] = { ...data.aiInputHistoryState.entries[0] };
+  delete data.aiInputHistoryState.entries[0].pinned;
+  assert.equal((await store.getHistory("", false))[0].pinned, true);
+
+  await store.setPinned((await store.getHistory("", false))[0], false);
+  assert.equal(data.aiInputHistoryPinnedIndex["1"], undefined);
+  assert.notEqual((await store.getHistory("", false))[0].pinned, true);
+});
+
+test("旧固定记录在下一次正常状态写入时自动迁移到独立索引", async () => {
+  const { store, data } = setup([{ id: "legacy", text: "旧固定", site: "a", pinned: true, kind: "send", createdAt: 1 }]);
+  await store.saveDraft("composer", "草稿", { site: "a" });
+  assert.equal(data.aiInputHistoryPinnedIndex.legacy, true);
+  delete data.aiInputHistoryState.entries[0].pinned;
+  assert.equal((await store.getHistory("", false)).find((item) => item.id === "legacy").pinned, true);
 });
 
 test("固定筛选与网站和搜索组合", async () => {

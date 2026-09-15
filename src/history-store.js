@@ -2,8 +2,10 @@
   "use strict";
 
   const STORAGE_KEY = "aiInputHistoryState";
+  const PINNED_INDEX_KEY = "aiInputHistoryPinnedIndex";
   const SETTINGS_KEY = "aiInputHistorySettings";
   const CONVERSATION_STATS_KEY = "aiInputHistoryConversationStats";
+  const PROMPT_QUEUE_KEY = "aiInputHistoryPromptQueues";
   const DEFAULT_SHORTCUT = "Ctrl+R";
   const DEFAULT_COMPLETION_NOTIFICATION = Object.freeze({
     enabled: false, provider: "browser", minDurationSeconds: 20, barkUrl: "", serverChanKey: "", pushPlusToken: "",
@@ -111,6 +113,37 @@
     return entry?.kind === "enter" ? { ...entry, kind: "send" } : entry;
   }
 
+  function sanitizePinnedIndex(value) {
+    const source = value && typeof value === "object" ? value : {};
+    return Object.fromEntries(Object.entries(source)
+      .filter(([id, pinned]) => typeof id === "string" && id.length > 0 && id.length <= 200 && pinned === true)
+      .slice(0, 2000));
+  }
+
+  function sanitizePromptQueueItem(item) {
+    if (!item || typeof item !== "object") return null;
+    const text = String(item.text || "").trim();
+    const id = String(item.id || "");
+    if (!text || !id || id.length > 200) return null;
+    return {
+      id,
+      text: text.slice(0, 20000),
+      createdAt: Number.isFinite(item.createdAt) ? item.createdAt : Date.now(),
+      updatedAt: Number.isFinite(item.updatedAt) ? item.updatedAt : Number.isFinite(item.createdAt) ? item.createdAt : Date.now()
+    };
+  }
+
+  function sanitizePromptQueues(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const result = {};
+    for (const [key, rawItems] of Object.entries(source).slice(0, 50)) {
+      if (!key || key.length > 500 || !Array.isArray(rawItems)) continue;
+      const items = rawItems.map(sanitizePromptQueueItem).filter(Boolean).slice(0, 20);
+      if (items.length) result[key] = items;
+    }
+    return result;
+  }
+
   function normalizeDomain(value) {
     const raw = String(value || "").trim().toLocaleLowerCase();
     if (!raw) return "";
@@ -202,6 +235,16 @@
     });
   }
 
+  async function storageSetState(state, extra = {}, unpinnedIds = []) {
+    const pinnedResult = await storageGet(PINNED_INDEX_KEY);
+    const pinnedIndex = sanitizePinnedIndex(pinnedResult[PINNED_INDEX_KEY]);
+    for (const entry of state?.entries || []) {
+      if (entry?.pinned === true && typeof entry.id === "string" && entry.id) pinnedIndex[entry.id] = true;
+    }
+    for (const id of unpinnedIds) delete pinnedIndex[id];
+    await storageSet({ ...extra, [STORAGE_KEY]: state, [PINNED_INDEX_KEY]: pinnedIndex });
+  }
+
   function runtimeMessage(message) {
     return new Promise((resolve, reject) => {
       chrome.runtime.sendMessage(message, (response) => {
@@ -245,17 +288,22 @@
         settings = sanitizeSettings({ ...await this.getSettings(), ...patch });
         const state = await this.getState();
         state.entries = pruneEntries(state.entries, settings);
-        await storageSet({ [SETTINGS_KEY]: settings, [STORAGE_KEY]: state });
+        await storageSetState(state, { [SETTINGS_KEY]: settings });
       });
       return settings;
     }
 
     async getState() {
-      const result = await storageGet(STORAGE_KEY);
+      const [result, pinnedResult] = await Promise.all([storageGet(STORAGE_KEY), storageGet(PINNED_INDEX_KEY)]);
       const stored = result[STORAGE_KEY];
       if (!stored || !Array.isArray(stored.entries)) return initialState();
+      const pinnedIndex = sanitizePinnedIndex(pinnedResult[PINNED_INDEX_KEY]);
+      const entries = stored.entries
+        .filter((entry) => entry && typeof entry.text === "string")
+        .map(normalizeEntry)
+        .map((entry) => pinnedIndex[entry.id] ? { ...entry, pinned: true } : entry);
       return {
-        entries: compactSentSnapshots(stored.entries.filter((entry) => entry && typeof entry.text === "string").map(normalizeEntry)),
+        entries: compactSentSnapshots(entries),
         drafts: Object.fromEntries(Object.entries(stored.drafts || {}).filter(([, draft]) => draft && typeof draft.text === "string")),
         positions: stored.positions && typeof stored.positions === "object" ? stored.positions : {},
         siteIcons: stored.siteIcons && typeof stored.siteIcons === "object" ? stored.siteIcons : {}
@@ -282,7 +330,7 @@
           ? collapseSnapshotsForSend(state.entries, context.fieldKey, context.sessionId)
           : state.entries;
         state.entries = pruneEntries([entry, ...existingEntries], settings);
-        await storageSet({ [STORAGE_KEY]: state });
+        await storageSetState(state);
         return entry;
       });
     }
@@ -297,7 +345,7 @@
         } else delete drafts[key];
         state.drafts = Object.fromEntries(Object.entries(drafts)
           .sort(([, left], [, right]) => right.updatedAt - left.updatedAt).slice(0, 50));
-        await storageSet({ [STORAGE_KEY]: state });
+        await storageSetState(state);
       });
     }
 
@@ -326,7 +374,7 @@
         if (!entry) throw new Error("记录已不存在 / Entry no longer exists");
         entry.pinned = Boolean(pinned);
         state.entries = pruneEntries(state.entries, await this.getSettings());
-        await storageSet({ [STORAGE_KEY]: state });
+        await storageSetState(state, {}, pinned ? [] : [entry.id]);
         return entry;
       });
     }
@@ -356,7 +404,7 @@
         };
         state.positions = Object.fromEntries(Object.entries(state.positions)
           .sort(([, left], [, right]) => (right.updatedAt || 0) - (left.updatedAt || 0)).slice(0, 50));
-        await storageSet({ [STORAGE_KEY]: state });
+        await storageSetState(state);
       });
     }
 
@@ -428,6 +476,78 @@
       await withStorageLock(() => storageSet({ [CONVERSATION_STATS_KEY]: model?.initialStats?.() || { version: 1, byAi: {} } }));
     }
 
+    async getPromptQueue(queueKey) {
+      const key = String(queueKey || "");
+      if (!key || key.length > 500) return [];
+      const result = await storageGet(PROMPT_QUEUE_KEY);
+      return sanitizePromptQueues(result[PROMPT_QUEUE_KEY])[key] || [];
+    }
+
+    async enqueuePrompt(queueKey, text) {
+      const key = String(queueKey || "");
+      const value = String(text || "").trim();
+      if (!key || key.length > 500 || !value) return null;
+      return withStorageLock(async () => {
+        const result = await storageGet(PROMPT_QUEUE_KEY);
+        const queues = sanitizePromptQueues(result[PROMPT_QUEUE_KEY]);
+        const items = queues[key] || [];
+        if (items.length >= 20) throw new Error("排队消息已达到 20 条上限");
+        const now = Date.now();
+        const item = { id: makeId(), text: value.slice(0, 20000), createdAt: now, updatedAt: now };
+        queues[key] = [...items, item];
+        await storageSet({ [PROMPT_QUEUE_KEY]: queues });
+        return item;
+      });
+    }
+
+    async updatePromptQueueItem(queueKey, id, text) {
+      const key = String(queueKey || "");
+      const value = String(text || "").trim();
+      if (!key || !id || !value) return false;
+      return withStorageLock(async () => {
+        const result = await storageGet(PROMPT_QUEUE_KEY);
+        const queues = sanitizePromptQueues(result[PROMPT_QUEUE_KEY]);
+        const item = (queues[key] || []).find((entry) => entry.id === id);
+        if (!item) return false;
+        item.text = value.slice(0, 20000);
+        item.updatedAt = Date.now();
+        await storageSet({ [PROMPT_QUEUE_KEY]: queues });
+        return true;
+      });
+    }
+
+    async removePromptQueueItem(queueKey, id) {
+      const key = String(queueKey || "");
+      if (!key || !id) return false;
+      return withStorageLock(async () => {
+        const result = await storageGet(PROMPT_QUEUE_KEY);
+        const queues = sanitizePromptQueues(result[PROMPT_QUEUE_KEY]);
+        const items = queues[key] || [];
+        const next = items.filter((entry) => entry.id !== id);
+        if (next.length === items.length) return false;
+        if (next.length) queues[key] = next; else delete queues[key];
+        await storageSet({ [PROMPT_QUEUE_KEY]: queues });
+        return true;
+      });
+    }
+
+    async movePromptQueue(fromKey, toKey) {
+      const from = String(fromKey || "");
+      const to = String(toKey || "");
+      if (!from || !to || from === to) return this.getPromptQueue(to || from);
+      return withStorageLock(async () => {
+        const result = await storageGet(PROMPT_QUEUE_KEY);
+        const queues = sanitizePromptQueues(result[PROMPT_QUEUE_KEY]);
+        const merged = [...(queues[to] || []), ...(queues[from] || [])]
+          .filter((item, index, all) => all.findIndex((entry) => entry.id === item.id) === index)
+          .sort((left, right) => left.createdAt - right.createdAt).slice(0, 20);
+        delete queues[from];
+        if (merged.length) queues[to] = merged;
+        await storageSet({ [PROMPT_QUEUE_KEY]: queues });
+        return merged;
+      });
+    }
+
     async saveSiteIcon(site, dataUrl) {
       if (!site || !/^data:image\//.test(dataUrl || "") || dataUrl.length > 180_000) return;
       await withStorageLock(async () => {
@@ -435,7 +555,7 @@
         state.siteIcons[site] = { dataUrl, updatedAt: Date.now() };
         state.siteIcons = Object.fromEntries(Object.entries(state.siteIcons)
           .sort(([, left], [, right]) => right.updatedAt - left.updatedAt).slice(0, 100));
-        await storageSet({ [STORAGE_KEY]: state });
+        await storageSetState(state);
       });
     }
 
@@ -454,7 +574,7 @@
         const entry = state.entries.find((item) => item.id === id && item.kind === "send");
         if (!entry) return false;
         entry.requestTiming = value;
-        await storageSet({ [STORAGE_KEY]: state });
+        await storageSetState(state);
         return true;
       });
     }
@@ -462,7 +582,7 @@
     async clearHistory() {
       await withStorageLock(async () => {
         const state = await this.getState();
-        await storageSet({ [STORAGE_KEY]: { ...state, entries: state.entries.filter((entry) => entry.pinned), drafts: {} } });
+        await storageSetState({ ...state, entries: state.entries.filter((entry) => entry.pinned), drafts: {} });
       });
     }
   }
@@ -470,6 +590,6 @@
   namespace.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
   namespace.DEFAULT_COMPLETION_NOTIFICATION = DEFAULT_COMPLETION_NOTIFICATION;
   namespace.HistoryStore = HistoryStore;
-  namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY, conversationStats: CONVERSATION_STATS_KEY };
-  namespace.historyModel = { collapseSnapshotsForSend, compactSentSnapshots, filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeCompletionNotification, sanitizeSettings, shortcutFromEvent };
+  namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY, pinnedIndex: PINNED_INDEX_KEY, conversationStats: CONVERSATION_STATS_KEY, promptQueue: PROMPT_QUEUE_KEY };
+  namespace.historyModel = { collapseSnapshotsForSend, compactSentSnapshots, filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeCompletionNotification, sanitizePromptQueueItem, sanitizePromptQueues, sanitizeSettings, shortcutFromEvent };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

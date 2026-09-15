@@ -9,15 +9,39 @@ if (new URLSearchParams(location.search).has("timing")) {
   function renderRequest(state) {
     if (!state) return;
     turn = document.createElement("article");
-    turn.innerHTML = `<div data-message-author-role="assistant" data-message-id="test-reply-${state.id}">${state.complete ? "示例回复已完成" : "正在生成示例回复……"}</div>${state.complete ? '<button data-testid="copy-turn-action-button" type="button">复制回复</button>' : '<button data-testid="stop-button" type="button">停止生成</button>'}`;
+    turn.innerHTML = `<div data-message-author-role="assistant" data-message-id="test-reply-${state.id}">${state.complete ? "示例回复已完成" : "正在生成示例回复……"}</div>${state.complete ? '<button aria-label="Copy response" type="button">复制回复</button>' : '<button data-testid="stop-button" type="button">停止生成</button>'}`;
     document.querySelector(".thread").appendChild(turn);
     turn.querySelector('[data-testid="stop-button"]')?.addEventListener("click", () => turn.querySelector('[data-testid="stop-button"]')?.remove());
   }
   renderRequest(JSON.parse(localStorage.getItem("aih-fixture-request") || "null"));
+  const voice = document.createElement("button");
+  voice.type = "submit";
+  voice.setAttribute("aria-label", "Start voice mode");
+  voice.textContent = "Voice";
+  voice.style.cssText = "position:absolute;right:58px;bottom:13px";
+  document.querySelector(".composer-wrap").appendChild(voice);
+  voice.addEventListener("click", (event) => {
+    event.preventDefault();
+    globalThis.__AIH_TEST_VOICE_CLICKS = (globalThis.__AIH_TEST_VOICE_CLICKS || 0) + 1;
+  });
   document.querySelector(".send").addEventListener("click", () => {
-    document.querySelector(".composer").value = "";
-    turn?.remove();
+    if (globalThis.__AIH_TEST_IGNORE_NEXT_SEND === true) {
+      globalThis.__AIH_TEST_IGNORE_NEXT_SEND = false;
+      globalThis.__AIH_TEST_IGNORED_SENDS = (globalThis.__AIH_TEST_IGNORED_SENDS || 0) + 1;
+      return;
+    }
+    const composer = document.querySelector(".composer");
+    const sentText = composer.value;
     requestIndex += 1;
+    const userTurn = document.createElement("article");
+    const userMessage = document.createElement("div");
+    userMessage.setAttribute("data-message-author-role", "user");
+    userMessage.setAttribute("data-message-id", `test-user-${requestIndex}`);
+    userMessage.textContent = sentText;
+    userTurn.appendChild(userMessage);
+    document.querySelector(".thread").appendChild(userTurn);
+    composer.value = "";
+    turn?.remove();
     localStorage.setItem("aih-fixture-request-index", String(requestIndex));
     const state = { id: requestIndex, complete: false };
     localStorage.setItem("aih-fixture-request", JSON.stringify(state));

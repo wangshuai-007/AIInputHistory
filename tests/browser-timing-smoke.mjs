@@ -151,7 +151,73 @@ try {
   await evaluate(`([...document.querySelectorAll("button")].find((button)=>button.textContent==="模拟回复完成")?.click(),true)`);
   await sleep(1200);
   assert.equal(await evaluate(`document.querySelector("[data-ai-input-history='root']").shadowRoot.querySelector(".launcher").classList.contains("timing-active")`), false, "纯图片/附件回复完成后应恢复历史图标");
-  console.log(`浏览器计时验收通过：文本请求 ${Math.round(finalState.timing.durationMs)}ms；纯图片/附件请求也可独立计时`);
+
+  await evaluate(`(()=>{const c=document.querySelector(".composer");const send=document.querySelector(".send");c.value="空闲直接发送";c.dispatchEvent(new Event("input",{bubbles:true}));send.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,cancelable:true,button:0,isPrimary:true}));send.click();return true})()`);
+  await waitFor(`__testMemory.aiInputHistoryState.entries.some((item)=>item.text==="空闲直接发送") && Boolean(document.querySelector('[data-testid="stop-button"]'))`);
+  const idleDirect = await evaluate(`({queued:Object.values(__testMemory.aiInputHistoryPromptQueues||{}).flat().some((item)=>item.text==="空闲直接发送"),composer:document.querySelector('.composer').value})`);
+  assert.equal(idleDirect.queued, false, "当前没有等待 GPT 回复时，物理点击发送不得进入 Queue");
+  assert.equal(idleDirect.composer, "", "空闲状态应直接由 ChatGPT 消费输入内容");
+  await evaluate(`([...document.querySelectorAll("button")].find((button)=>button.textContent==="模拟回复完成")?.click(),true)`);
+  await sleep(700);
+
+  await evaluate(`(()=>{const c=document.querySelector(".composer");c.value="Queue 基准请求";c.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector(".send").click();return true})()`);
+  await waitFor(`Boolean(document.querySelector('[data-testid="stop-button"]'))`);
+  await evaluate(`(()=>{const c=document.querySelector(".composer");c.value="排队消息一";c.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector(".send").click();return true})()`);
+  await sleep(250);
+  const queuedBeforeEdit = await evaluate(`(()=>{const q=__testMemory.aiInputHistoryPromptQueues||{};const items=Object.values(q)[0]||[];const root=document.querySelector("[data-ai-input-queue='root']")?.shadowRoot;return {items,visible:!root?.querySelector('.queue')?.classList.contains('hidden'),sendNow:Boolean(root?.querySelector('[data-action="send-now"]'))}})()`);
+  assert.equal(queuedBeforeEdit.items.length, 1, "回复进行中再次发送应进入队列而不是立即发送");
+  assert.equal(queuedBeforeEdit.items[0]?.text, "排队消息一");
+  assert.equal(queuedBeforeEdit.visible, true, "排队后应显示队列面板");
+  assert.equal(queuedBeforeEdit.sendNow, true, "每条 Queue 消息都应提供立即发送按钮");
+
+  await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-queue='root']").shadowRoot;root.querySelector('[data-action="edit"]').click();const editor=root.querySelector('textarea[data-editor]');editor.value="排队消息一（已编辑）";root.querySelector('[data-action="save"]').click();return true})()`);
+  await sleep(180);
+  await evaluate(`(()=>{const c=document.querySelector(".composer");c.value="准备撤回的消息";c.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector(".send").click();return true})()`);
+  await sleep(180);
+  await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-queue='root']").shadowRoot;const buttons=[...root.querySelectorAll('[data-action="remove"]')];buttons.at(-1)?.click();return true})()`);
+  await sleep(180);
+  const queueAfterEditRemove = await evaluate(`Object.values(__testMemory.aiInputHistoryPromptQueues||{})[0]||[]`);
+  assert.deepEqual(queueAfterEditRemove.map((item) => item.text), ["排队消息一（已编辑）"], "排队消息应支持编辑与撤回");
+  await evaluate(`(()=>{const c=document.querySelector(".composer");c.value="排队消息二";c.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector(".send").click();return true})()`);
+  await sleep(180);
+  assert.deepEqual((await evaluate(`(Object.values(__testMemory.aiInputHistoryPromptQueues||{})[0]||[]).map((item)=>item.text)`)), ["排队消息一（已编辑）", "排队消息二"], "多条消息应按 FIFO 顺序排队");
+
+  await evaluate(`(globalThis.__AIH_TEST_IGNORE_NEXT_SEND=true,true)`);
+  await evaluate(`([...document.querySelectorAll("button")].find((button)=>button.textContent==="模拟回复完成")?.click(),true)`);
+  await waitFor(`(Object.values(__testMemory.aiInputHistoryPromptQueues||{})[0]||[]).length===1 && Boolean(document.querySelector('[data-testid="stop-button"]'))`);
+  await sleep(250);
+  const firstDispatch = await evaluate(`({queue:(Object.values(__testMemory.aiInputHistoryPromptQueues||{})[0]||[]).map((item)=>item.text),busy:Boolean(document.querySelector('[data-testid="stop-button"]')),composer:document.querySelector('.composer').value,secondSent:__testMemory.aiInputHistoryState.entries.some((item)=>item.text==="排队消息二"),ignored:globalThis.__AIH_TEST_IGNORED_SENDS||0,voiceClicks:globalThis.__AIH_TEST_VOICE_CLICKS||0,firstHistoryCount:__testMemory.aiInputHistoryState.entries.filter((item)=>item.text==="排队消息一（已编辑）").length,userSent:[...document.querySelectorAll('[data-message-author-role="user"]')].some((item)=>item.textContent.trim()==="排队消息一（已编辑）")})`);
+  assert.deepEqual(firstDispatch.queue, ["排队消息二"], "第一条自动发送后第二条必须继续等待");
+  assert.equal(firstDispatch.secondSent, false, "上一条的新回复未结束前不得发送第二条队列消息");
+  assert.equal(firstDispatch.busy, true, "第一条自动发送后应进入下一轮生成状态");
+  assert.equal(firstDispatch.composer, "", "自动发送成功后输入框应清空");
+  assert.equal(firstDispatch.ignored, 1, "第一次自动 click 被页面忽略后应继续重试而不是丢 Queue");
+  assert.equal(firstDispatch.voiceClicks, 0, "Queue 自动发送绝不能误点语音/麦克风按钮");
+  assert.equal(firstDispatch.userSent, true, "只有会话中真正出现对应 user turn 才能认为 Queue 已发送成功");
+  assert.equal(firstDispatch.firstHistoryCount, 1, "自动重试不应重复写入发送历史");
+
+  await evaluate(`([...document.querySelectorAll("button")].find((button)=>button.textContent==="模拟回复完成")?.click(),true)`);
+  await waitFor(`(Object.values(__testMemory.aiInputHistoryPromptQueues||{})[0]||[]).length===0 && Boolean(document.querySelector('[data-testid="stop-button"]'))`);
+  await sleep(120);
+  const secondDispatch = await evaluate(`({queue:Object.values(__testMemory.aiInputHistoryPromptQueues||{})[0]||[],busy:Boolean(document.querySelector('[data-testid="stop-button"]'))})`);
+  assert.equal(secondDispatch.queue.length, 0, "第二轮结束后第二条排队消息才应自动发送");
+  assert.equal(secondDispatch.busy, true, "第二条自动发送后应进入新的生成状态");
+  await evaluate(`([...document.querySelectorAll("button")].find((button)=>button.textContent==="模拟回复完成")?.click(),true)`);
+  await sleep(700);
+
+  await evaluate(`(()=>{const c=document.querySelector(".composer");c.value="右键停止计时测试";c.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector(".send").click();return true})()`);
+  await waitFor(`Boolean(document.querySelector('[data-testid="stop-button"]')) && document.querySelector("[data-ai-input-history='root']").shadowRoot.querySelector(".launcher").classList.contains("timing-active")`);
+  const launcherMenu = await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history='root']").shadowRoot;const launcher=root.querySelector('.launcher');launcher.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:60,clientY:60}));const menu=root.querySelector('.launcher-menu');const buttons=[...menu.querySelectorAll('button')];return {visible:!menu.classList.contains('hidden'),labels:buttons.map((b)=>b.textContent.trim()),stopDisabled:buttons.find((b)=>b.dataset.launcherAction==='stop')?.disabled===true}})()`);
+  assert.equal(launcherMenu.visible, true, "右键悬浮计时应打开菜单而不是直接隐藏");
+  assert.deepEqual(launcherMenu.labels, ["隐藏悬浮按钮", "停止计时"], "右键菜单应同时提供隐藏和停止计时");
+  assert.equal(launcherMenu.stopDisabled, false, "正在计时时停止计时菜单必须可用");
+  await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history='root']").shadowRoot;root.querySelector('[data-launcher-action="stop"]').click();return true})()`);
+  await waitFor(`!document.querySelector("[data-ai-input-history='root']").shadowRoot.querySelector(".launcher").classList.contains("timing-active")`);
+  const stoppedTiming = await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history='root']").shadowRoot;const entry=__testMemory.aiInputHistoryState.entries.find((item)=>item.text==="右键停止计时测试");return {status:entry?.requestTiming?.status||null,launcherHidden:root.querySelector('.launcher').classList.contains('hidden')}})()`);
+  assert.equal(stoppedTiming.status, "cancelled", "停止计时应保存 cancelled 状态");
+  assert.equal(stoppedTiming.launcherHidden, false, "停止计时不能同时隐藏悬浮按钮");
+
+  console.log(`浏览器计时/Queue 验收通过：文本请求 ${Math.round(finalState.timing.durationMs)}ms；Queue 可恢复异常发送，悬浮计时右键可停止`);
 } finally {
   socket.close();
   const exited = new Promise((resolve) => browser.once("exit", resolve));

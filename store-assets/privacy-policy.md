@@ -1,10 +1,10 @@
 # AI Input History Privacy Policy / AI 输入历史隐私政策
 
-**Effective date / 生效日期：2026-09-10**
+**Effective date / 生效日期：2026-09-15**
 
 ## 中文
 
-AI 输入历史是一款以浏览器本地存储为默认方式的扩展，用于保存已支持或用户明确添加的 AI 网站中的输入草稿、自动快照和发送前内容，并提供搜索、筛选、恢复、ChatGPT 回复计时和可选的回复完成通知。
+AI 输入历史是一款以浏览器本地存储为默认方式的扩展，用于保存已支持或用户明确添加的 AI 网站中的输入草稿、自动快照和发送前内容，并提供搜索、筛选、恢复、AI 对话统计、ChatGPT Queue 排队、回复计时和可选的回复完成通知。
 
 ### 处理的数据
 
@@ -13,14 +13,17 @@ AI 输入历史是一款以浏览器本地存储为默认方式的扩展，用�
 - 用户在聊天输入框中主动输入的文本；
 - 当前网站域名和页面标题，用于标识记录来源；
 - 草稿、自动快照、发送状态和创建时间；
+- ChatGPT Queue 中尚未发送的文本、队列顺序和发送确认状态；
+- AI 对话统计所需的 AI 类型、会话去重标识以及日/周/月使用日期键；
 - 开启回复计时或完成通知后，发送时间、网页观察到的回复完成时间、总耗时及状态；扩展不保存 GPT 回复正文；
+- 通知调试日志中的渠道、检测方式、页面可见性、HTTP 状态等诊断字段；不记录问题正文、GPT 回复、Webhook 或 Token；
 - 自定义域名、快捷键、语言、保存上限、界面位置和通知设置；
 - 通知服务所需的 Webhook、Token、Headers 或 Body 模板；
 - 当前网站的 favicon，仅用于网站筛选列表中的图标。
 
 ### 数据用途、存储与通知
 
-历史、草稿和设置保存在 `chrome.storage.local`。为支持 F5、关闭标签页后重新打开同一 ChatGPT 会话 URL，以及重启浏览器后在 30 分钟有效期内恢复计时，进行中的计时状态也会临时保存在 `chrome.storage.local`，并按会话 URL（域名 + pathname）匹配；完成、取消、失败、超时或过期后会被清除。扩展没有开发者运营的服务器，不会把这些数据发送给开发者，也不会用于广告、画像、分析、出售或信用评估。
+历史、草稿、Queue、AI 对话统计、通知调试日志和设置保存在 `chrome.storage.local`。为支持 F5、关闭标签页后重新打开同一 ChatGPT 会话 URL，以及重启浏览器后在 30 分钟有效期内恢复计时，进行中的计时状态也会临时保存在 `chrome.storage.local`，并按会话 URL（域名 + pathname）匹配；完成、取消、失败、超时或过期后会被清除。扩展没有开发者运营的服务器，不会把这些数据发送给开发者，也不会用于广告、画像、分析、出售或信用评估。
 
 回复完成通知默认关闭。仅当用户主动启用第三方推送、企业群机器人或自定义 HTTP 通知时，扩展才会向用户选择的通知服务发送通知请求。内置通知默认只发送“ChatGPT 回复完成”和问题前 32 个字符的摘要；纯图片或附件请求发送通用提示，不发送 GPT 回复正文。
 自定义 HTTP 请求允许用户在模板中显式使用 `{{question}}`、`{{pageUrl}}`、`{{duration}}` 等变量；使用这些变量意味着相应完整问题、页面地址或计时信息会被发送到用户配置的目标服务。Webhook、Token 等凭据仅保存在扩展本地，并只用于对应通知请求。
@@ -53,15 +56,15 @@ AI 输入历史是一款以浏览器本地存储为默认方式的扩展，用�
 ---
 ## English
 
-AI Input History is local-first by default. It saves drafts, automatic snapshots, and text immediately before sending on supported or user-added AI sites, and provides search, filtering, restoration, ChatGPT reply timing, and optional completion notifications.
+AI Input History is local-first by default. It saves drafts, automatic snapshots, and text immediately before sending on supported or user-added AI sites, and provides search, filtering, restoration, per-AI conversation statistics, ChatGPT prompt queues, reply timing, and optional completion notifications.
 
 ### Data handled
 
-The extension may handle chat input text, site domain and page title, drafts and sent timestamps, reply timing metadata, custom domains, shortcuts, language and retention settings, UI positions, notification configuration, and same-origin favicons. Notification configuration may include Webhook URLs, tokens, custom headers, and body templates. GPT reply bodies are not stored.
+The extension may handle chat input text, site domain and page title, drafts and sent timestamps, queued ChatGPT prompt text and queue state, per-AI conversation identifiers and day/week/month activity keys, reply timing metadata, redacted notification-debug fields, custom domains, shortcuts, language and retention settings, UI positions, notification configuration, and same-origin favicons. Notification configuration may include Webhook URLs, tokens, custom headers, and body templates. Notification debug logs do not store prompt text, GPT replies, Webhooks, or tokens. GPT reply bodies are not stored.
 
 ### Purpose, storage, and notifications
 
-History, drafts, and settings are stored in `chrome.storage.local`. To continue an in-progress ChatGPT timer after F5, after closing and reopening the same conversation URL, or after restarting the browser within the 30-minute validity window, transient active-timing state is also stored in `chrome.storage.local` and matched by conversation URL (host + pathname). It is cleared on completion, cancellation, failure, timeout, or expiry. The extension has no developer-operated server and does not send this data to the developer or use it for advertising, profiling, analytics, sale, or credit decisions.
+History, drafts, queued prompts, conversation statistics, redacted notification debug logs, and settings are stored in `chrome.storage.local`. To continue an in-progress ChatGPT timer after F5, after closing and reopening the same conversation URL, or after restarting the browser within the 30-minute validity window, transient active-timing state is also stored in `chrome.storage.local` and matched by conversation URL (host + pathname). It is cleared on completion, cancellation, failure, timeout, or expiry. The extension has no developer-operated server and does not send this data to the developer or use it for advertising, profiling, analytics, sale, or credit decisions.
 
 Completion notifications are off by default. Only when the user explicitly enables a third-party push provider, group robot, or custom HTTP notification does the extension send a notification request to the service selected by the user. Built-in providers send the completion title and, by default, only the first 32 characters of the prompt. Image-only or attachment-only requests use a generic message. GPT reply bodies are not sent.
 
