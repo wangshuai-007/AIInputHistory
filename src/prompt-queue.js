@@ -42,7 +42,8 @@
 
   function queueStyle() {
     return `:host{all:initial;position:fixed;z-index:2147483645;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#202123}
-      .queue{box-sizing:border-box;min-width:320px;max-width:720px;border:1px solid rgba(16,163,127,.22);border-radius:16px;background:rgba(255,255,255,.96);box-shadow:0 12px 36px rgba(0,0,0,.15);backdrop-filter:blur(14px);overflow:hidden;pointer-events:auto}
+      .stack{display:flex;flex-direction:column;gap:7px;align-items:stretch}.queue{box-sizing:border-box;min-width:320px;max-width:720px;border:1px solid rgba(16,163,127,.22);border-radius:16px;background:rgba(255,255,255,.96);box-shadow:0 12px 36px rgba(0,0,0,.15);backdrop-filter:blur(14px);overflow:hidden;pointer-events:auto}
+      .intent{align-self:flex-end;box-sizing:border-box;border:1px solid rgba(16,163,127,.34);border-radius:999px;padding:5px 10px;background:rgba(236,253,245,.96);box-shadow:0 6px 18px rgba(0,0,0,.10);color:#087c64;font-size:11px;font-weight:700;line-height:1.2;white-space:nowrap;pointer-events:none}
       .head{display:flex;align-items:center;justify-content:space-between;padding:9px 12px 7px;font-size:12px;font-weight:650;color:#087c64;border-bottom:1px solid rgba(16,163,127,.12)}
       .count{font-variant-numeric:tabular-nums;color:#667085;font-weight:500}.items{max-height:260px;overflow:auto;padding:6px}
       .item{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:start;padding:8px;border-radius:11px}.item+.item{margin-top:2px}.item:hover{background:rgba(16,163,127,.055)}
@@ -50,7 +51,7 @@
       .actions{display:flex;gap:2px;flex-wrap:wrap;justify-content:flex-end}.action{border:0;background:transparent;color:#667085;border-radius:7px;padding:5px 7px;cursor:pointer;font:inherit;font-size:11px}.action:hover{background:rgba(0,0,0,.06);color:#202123}.action:disabled{opacity:.45;cursor:default}.action.send-now{color:#087c64;font-weight:650}.action.remove:hover{color:#b42318;background:#fff1f0}.status.failed{color:#b42318}
       .editing{grid-template-columns:28px minmax(0,1fr)}.editor{grid-column:2/-1;display:grid;gap:7px}.editor textarea{box-sizing:border-box;width:100%;min-height:72px;max-height:180px;resize:vertical;border:1px solid rgba(16,163,127,.3);border-radius:10px;padding:8px 10px;background:#fff;color:inherit;font:12px/1.45 inherit;outline:none}.editor textarea:focus{border-color:#10a37f;box-shadow:0 0 0 2px rgba(16,163,127,.12)}
       .editor-actions{display:flex;justify-content:flex-end;gap:6px}.save{background:#10a37f;color:#fff}.save:hover{background:#0d8f70;color:#fff}.status{font-size:10px;color:#087c64;padding-top:4px}.hidden{display:none!important}
-      @media(prefers-color-scheme:dark){:host{color:#ececec}.queue{background:rgba(33,33,33,.96);border-color:rgba(52,211,153,.22);box-shadow:0 12px 36px rgba(0,0,0,.45)}.head{color:#6ee7b7;border-bottom-color:rgba(52,211,153,.12)}.count,.action{color:#a6a6a6}.item:hover{background:rgba(52,211,153,.06)}.number{background:rgba(52,211,153,.12);color:#6ee7b7}.action:hover{background:rgba(255,255,255,.08);color:#fff}.editor textarea{background:#2f2f2f;color:#ececec;border-color:rgba(52,211,153,.28)}.status{color:#6ee7b7}}
+      @media(prefers-color-scheme:dark){:host{color:#ececec}.queue{background:rgba(33,33,33,.96);border-color:rgba(52,211,153,.22);box-shadow:0 12px 36px rgba(0,0,0,.45)}.intent{background:rgba(6,78,59,.96);border-color:rgba(110,231,183,.38);color:#a7f3d0;box-shadow:0 6px 18px rgba(0,0,0,.32)}.head{color:#6ee7b7;border-bottom-color:rgba(52,211,153,.12)}.count,.action{color:#a6a6a6}.item:hover{background:rgba(52,211,153,.06)}.number{background:rgba(52,211,153,.12);color:#6ee7b7}.action:hover{background:rgba(255,255,255,.08);color:#fff}.editor textarea{background:#2f2f2f;color:#ececec;border-color:rgba(52,211,153,.28)}.status{color:#6ee7b7}}
     `;
   }
 
@@ -93,6 +94,7 @@
       this.render();
       this.observer = new MutationObserver(() => {
         this.syncConversationKey().catch(() => {});
+        this.updateIntentIndicator();
         this.scheduleDrain(0);
         this.reposition();
       });
@@ -111,7 +113,7 @@
       this.host = document.createElement("div");
       this.host.dataset.aiInputQueue = "root";
       this.shadow = this.host.attachShadow({ mode: globalThis.__AIH_TEST_OPEN_SHADOW === true ? "open" : "closed" });
-      this.shadow.innerHTML = `<style>${queueStyle()}</style><section class="queue hidden"><div class="head"><span class="title"></span><span class="count"></span></div><div class="items"></div></section>`;
+      this.shadow.innerHTML = `<style>${queueStyle()}</style><div class="stack"><section class="queue hidden"><div class="head"><span class="title"></span><span class="count"></span></div><div class="items"></div></section><div class="intent hidden" data-queue-intent></div></div>`;
       this.shadow.addEventListener("click", (event) => this.handleClick(event));
       document.documentElement.appendChild(this.host);
     }
@@ -132,9 +134,21 @@
       this.shadow.querySelector(".title").textContent = namespace.i18n.t("queue.title");
       this.shadow.querySelector(".count").textContent = namespace.i18n.t("queue.count", { count: this.items.length });
       this.shadow.querySelector(".items").innerHTML = this.items.map((item, index) => this.itemMarkup(item, index)).join("");
+      this.updateIntentIndicator();
       this.reposition();
       if (this.editingId) this.shadow.querySelector(`[data-editor="${CSS.escape(this.editingId)}"]`)?.focus();
     }
+    updateIntentIndicator() {
+      if (!this.shadow) return false;
+      const intent = this.shadow.querySelector("[data-queue-intent]");
+      if (!intent) return false;
+      const visible = this.shouldQueue();
+      const label = namespace.i18n.t("queue.nextQueued");
+      if (intent.textContent !== label) intent.textContent = label;
+      intent.classList.toggle("hidden", !visible);
+      return visible;
+    }
+
     itemMarkup(item, index) {
       const editing = this.editingId === item.id;
       const dispatching = this.dispatchingId === item.id;
@@ -487,7 +501,14 @@
       return Boolean(this.autoDispatching && this.dispatchingId && this.dispatchRecordedId === this.dispatchingId);
     }
 
+    onRequestStarted() {
+      this.updateIntentIndicator();
+      this.reposition();
+    }
+
     onRequestFinished() {
+      this.updateIntentIndicator();
+      this.reposition();
       this.scheduleDrain(0);
     }
     async syncConversationKey() {
@@ -507,7 +528,9 @@
     }
 
     reposition() {
-      if (!this.host || !this.items.length) return;
+      if (!this.host) return;
+      const intentVisible = !this.shadow?.querySelector("[data-queue-intent]")?.classList.contains("hidden");
+      if (!this.items.length && !intentVisible) return;
       const input = this.getInput?.() || this.adapter.findComposer(document, this.shadow);
       if (!input?.isConnected) return;
       const anchor = input.closest("form") || input;
@@ -515,8 +538,8 @@
       const width = Math.min(720, Math.max(320, rect.width));
       this.host.style.width = `${width}px`;
       this.host.style.left = `${Math.max(8, Math.min(window.innerWidth - width - 8, rect.left))}px`;
-      const section = this.shadow.querySelector(".queue");
-      const height = section?.getBoundingClientRect().height || 120;
+      const stack = this.shadow.querySelector(".stack");
+      const height = stack?.getBoundingClientRect().height || 120;
       const above = rect.top - height - 8;
       this.host.style.top = `${above >= 8 ? above : Math.min(window.innerHeight - height - 8, rect.bottom + 8)}px`;
     }

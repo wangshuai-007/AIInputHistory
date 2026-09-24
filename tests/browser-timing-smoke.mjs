@@ -156,11 +156,16 @@ try {
 
   await evaluate(`(()=>{const c=document.querySelector(".composer");const send=document.querySelector(".send");c.value="空闲直接发送";c.dispatchEvent(new Event("input",{bubbles:true}));send.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,cancelable:true,button:0,isPrimary:true}));send.click();return true})()`);
   await waitFor(`__testMemory.aiInputHistoryState.entries.some((item)=>item.text==="空闲直接发送") && Boolean(document.querySelector('[data-testid="stop-button"]'))`);
+  const queueIntentWhileBusy = await evaluate(`(()=>{const intent=document.querySelector("[data-ai-input-queue='root']")?.shadowRoot?.querySelector('[data-queue-intent]');return {visible:Boolean(intent)&&!intent.classList.contains('hidden'),text:intent?.textContent||''}})()`);
+  assert.equal(queueIntentWhileBusy.visible, true, "当前回复未结束、下一条会进入 Queue 时必须提前显示状态标识");
+  assert.equal(queueIntentWhileBusy.text, "下一条将加入队列");
   const idleDirect = await evaluate(`({queued:Object.values(__testMemory.aiInputHistoryPromptQueues||{}).flat().some((item)=>item.text==="空闲直接发送"),composer:document.querySelector('.composer').value})`);
   assert.equal(idleDirect.queued, false, "当前没有等待 GPT 回复时，物理点击发送不得进入 Queue");
   assert.equal(idleDirect.composer, "", "空闲状态应直接由 ChatGPT 消费输入内容");
   await evaluate(`([...document.querySelectorAll("button")].find((button)=>button.textContent==="模拟回复完成")?.click(),true)`);
   await sleep(700);
+  const queueIntentAfterComplete = await evaluate(`(()=>{const intent=document.querySelector("[data-ai-input-queue='root']")?.shadowRoot?.querySelector('[data-queue-intent]');return Boolean(intent)&&!intent.classList.contains('hidden')})()`);
+  assert.equal(queueIntentAfterComplete, false, "回复结束、下一条恢复直接发送后状态标识应立即消失");
 
   await evaluate(`(()=>{const c=document.querySelector(".composer");c.value="Queue 基准请求";c.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector(".send").click();return true})()`);
   await waitFor(`Boolean(document.querySelector('[data-testid="stop-button"]'))`);

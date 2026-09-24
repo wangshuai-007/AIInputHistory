@@ -7,14 +7,18 @@ const assert = require("node:assert/strict");
 const notificationSource = fs.readFileSync(path.join(__dirname, "..", "src", "completion-notification.js"), "utf8");
 const backgroundSource = fs.readFileSync(path.join(__dirname, "..", "background.js"), "utf8");
 
-function setup(config) {
+function setup(config, fixedNow = null) {
   let listener;
   const notifications = [];
   const requests = [];
   const data = { aiInputHistorySettings: { language: "zh-CN", completionNotification: config } };
   const sessionData = {};
+  const RuntimeDate = fixedNow == null ? Date : class extends Date {
+    constructor(...args) { super(...(args.length ? args : [fixedNow])); }
+    static now() { return fixedNow; }
+  };
   const context = {
-    URL, URLSearchParams, Date, crypto: { randomUUID: () => "id" }, setTimeout, clearTimeout,
+    URL, URLSearchParams, Date: RuntimeDate, crypto: { randomUUID: () => "id" }, setTimeout, clearTimeout,
     fetch: async (url, options) => { requests.push({ url, options }); return { ok: true, status: 200, text: async () => "" }; },
     chrome: {
       runtime: { lastError: null, onMessage: { addListener(value) { listener = value; } } },
@@ -29,7 +33,7 @@ function setup(config) {
   context.importScripts = () => vm.runInNewContext(notificationSource, context);
   vm.runInNewContext(backgroundSource, context);
   const send = (message, tabId = 1) => new Promise((resolve) => listener(message, { tab: { id: tabId } }, resolve));
-  return { send, notifications, requests, sessionData, data };
+  return { send, notifications, requests, sessionData, data, context };
 }
 
 test("浏览器通知只包含截断后的问题摘要", async () => {
@@ -95,8 +99,34 @@ test("自动通知默认低于 20 秒跳过，达到阈值才发送", async () =
   assert.equal(custom.notifications.length, 1);
 });
 
-test("测试通知绕过最低耗时，但关闭总开关时仍拒绝发送", async () => {
-  const h = setup({ enabled: true, provider: "browser", minDurationSeconds: 120 });
+test("自动通知只在任一可用时间段内发送，并支持跨午夜", async () => {
+  const noon = new Date(2026, 0, 2, 12, 0, 0).getTime();
+  const allowed = setup({ enabled: true, provider: "browser", minDurationSeconds: 0, availableTimes: [{ start: "08:00", end: "10:00" }, { start: "11:30", end: "13:00" }] }, noon);
+  const sent = await allowed.send({ type: "AIH_REQUEST_COMPLETED", event: { promptText: "午间通知", durationMs: 1000, completedAt: noon } });
+  assert.equal(sent.ok, true);
+  assert.equal(sent.withinAvailableTime, true);
+  assert.equal(sent.availableTimeCount, 2);
+  assert.equal(allowed.notifications.length, 1);
+
+  const blocked = setup({ enabled: true, provider: "browser", minDurationSeconds: 0, availableTimes: [{ start: "13:00", end: "14:00" }] }, noon);
+  const skipped = await blocked.send({ type: "AIH_REQUEST_COMPLETED", event: { promptText: "不在时段", durationMs: 1000, completedAt: noon } });
+  assert.equal(skipped.ok, true);
+  assert.equal(skipped.skipped, true);
+  assert.equal(skipped.reason, "outside-available-time");
+  assert.equal(skipped.localTime, "12:00");
+  assert.equal(blocked.notifications.length, 0);
+
+  const late = new Date(2026, 0, 2, 23, 30, 0).getTime();
+  const overnight = setup({ enabled: true, provider: "browser", minDurationSeconds: 0, availableTimes: [{ start: "22:00", end: "02:00" }] }, late);
+  const overnightSent = await overnight.send({ type: "AIH_REQUEST_COMPLETED", event: { promptText: "跨午夜", durationMs: 1000, completedAt: late } });
+  assert.equal(overnightSent.ok, true);
+  assert.equal(overnightSent.withinAvailableTime, true);
+  assert.equal(overnight.notifications.length, 1);
+});
+
+test("测试通知绕过最低耗时和可用时间，但关闭总开关时仍拒绝发送", async () => {
+  const noon = new Date(2026, 0, 2, 12, 0, 0).getTime();
+  const h = setup({ enabled: true, provider: "browser", minDurationSeconds: 120, availableTimes: [{ start: "13:00", end: "14:00" }] }, noon);
   const sent = await h.send({ type: "AIH_NOTIFICATION_TEST" });
   assert.equal(sent.ok, true);
   assert.equal(h.notifications.length, 1);

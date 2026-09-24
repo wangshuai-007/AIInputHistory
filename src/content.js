@@ -242,7 +242,9 @@
     if (requestTiming.active && Math.abs(sentAt - requestTiming.active.startedAt) < 1500) return requestTiming.active;
     const captured = metadata.timing || requestTiming.capture(context.site);
     if (captured) captured.startedAt = sentAt;
-    return requestTiming.start(context.site, captured, { promptText: metadata.promptText || "", pageUrl: location.href });
+    const tracking = requestTiming.start(context.site, captured, { promptText: metadata.promptText || "", pageUrl: location.href });
+    promptQueue?.onRequestStarted?.();
+    return tracking;
   }
 
   async function recordSend(text, context, source, metadata = {}) {

@@ -70,7 +70,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       visibility: message?.visibility || null,
       page: safePageRef(event?.pageUrl), sourceTabId: sender.tab?.id ?? null
     })
-      .then(() => deliverConfiguredNotification(event, { ignoreMinimumDuration: isTest, traceId }))
+      .then(() => deliverConfiguredNotification(event, { ignoreMinimumDuration: isTest, ignoreAvailableTime: isTest, traceId }))
       .then(async (result) => {
         if (isTest && result?.skipped) throw new Error("完成通知尚未开启或设置尚未保存");
         await appendNotificationDebug({ traceId, stage: "delivery-finished", ...summarizeDeliveryResult(result) });
@@ -133,7 +133,7 @@ function safeError(error) {
 
 function sanitizeNotificationDebugEntry(entry = {}) {
   const allowed = ["traceId", "stage", "type", "isTest", "provider", "enabled", "minDurationSeconds", "durationMs",
-    "notificationEligible", "detectionTrigger", "visibility", "page", "sourceTabId", "deliveryKind", "endpointHost", "httpStatus", "skipped", "reason", "error"];
+    "availableTimeCount", "localTime", "withinAvailableTime", "notificationEligible", "detectionTrigger", "visibility", "page", "sourceTabId", "deliveryKind", "endpointHost", "httpStatus", "skipped", "reason", "error"];
   const result = { at: Date.now() };
   allowed.forEach((key) => {
     const value = entry[key];
@@ -161,6 +161,8 @@ function summarizeDeliveryResult(result = {}) {
     provider: result.provider || null, deliveryKind: result.deliveryKind || null,
     skipped: result.skipped === true, reason: result.reason || null,
     minDurationSeconds: Number.isFinite(result.minDurationSeconds) ? result.minDurationSeconds : null,
+    availableTimeCount: Number.isFinite(result.availableTimeCount) ? result.availableTimeCount : null,
+    localTime: result.localTime || null, withinAvailableTime: typeof result.withinAvailableTime === "boolean" ? result.withinAvailableTime : null,
     httpStatus: Number.isFinite(result.httpStatus) ? result.httpStatus : null
   };
 }
@@ -204,19 +206,58 @@ async function handleTimingSessionMessage(message) {
   return task;
 }
 
-async function deliverConfiguredNotification(event, { ignoreMinimumDuration = false, traceId = "" } = {}) {
+function sanitizeNotificationAvailableTimes(value) {
+  const source = Array.isArray(value) ? value : [];
+  const seen = new Set();
+  return source.map((range) => {
+    const start = String(range?.start || "").trim();
+    const end = String(range?.end || "").trim();
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(end)) return null;
+    const key = `${start}-${end}`;
+    if (seen.has(key)) return null;
+    seen.add(key);
+    return { start, end };
+  }).filter(Boolean).slice(0, 12);
+}
+
+function timeToMinutes(value) {
+  const [hours, minutes] = String(value).split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function notificationTimeStatus(ranges, date = new Date()) {
+  const normalized = sanitizeNotificationAvailableTimes(ranges);
+  const localMinute = date.getHours() * 60 + date.getMinutes();
+  const localTime = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  if (!normalized.length) return { withinAvailableTime: true, availableTimeCount: 0, localTime };
+  const withinAvailableTime = normalized.some(({ start, end }) => {
+    const startMinute = timeToMinutes(start);
+    const endMinute = timeToMinutes(end);
+    if (startMinute === endMinute) return true;
+    if (startMinute < endMinute) return localMinute >= startMinute && localMinute < endMinute;
+    return localMinute >= startMinute || localMinute < endMinute;
+  });
+  return { withinAvailableTime, availableTimeCount: normalized.length, localTime };
+}
+
+async function deliverConfiguredNotification(event, { ignoreMinimumDuration = false, ignoreAvailableTime = false, traceId = "" } = {}) {
   const settings = await storageGet("aiInputHistorySettings") || {};
   const config = settings.completionNotification || {};
   const provider = config.provider || "browser";
   const parsedMinimum = Number.parseInt(config.minDurationSeconds, 10);
   const minDurationSeconds = Number.isFinite(parsedMinimum) ? Math.min(3600, Math.max(0, parsedMinimum)) : 20;
+  const timeStatus = notificationTimeStatus(config.availableTimes);
   await appendNotificationDebug({
     traceId, stage: "config-resolved", provider, enabled: config.enabled === true,
-    minDurationSeconds, durationMs: Number.isFinite(event?.durationMs) ? event.durationMs : null
+    minDurationSeconds, durationMs: Number.isFinite(event?.durationMs) ? event.durationMs : null,
+    ...timeStatus
   });
   if (config.enabled !== true) return { skipped: true, reason: "disabled", provider };
   if (!ignoreMinimumDuration && Number.isFinite(event?.durationMs) && event.durationMs < minDurationSeconds * 1000) {
-    return { skipped: true, reason: "below-min-duration", minDurationSeconds, provider };
+    return { skipped: true, reason: "below-min-duration", minDurationSeconds, provider, ...timeStatus };
+  }
+  if (!ignoreAvailableTime && !timeStatus.withinAvailableTime) {
+    return { skipped: true, reason: "outside-available-time", minDurationSeconds, provider, ...timeStatus };
   }
   const model = globalThis.AIInputHistory?.notificationModel;
   if (!model) throw new Error("通知模块未加载");
@@ -227,7 +268,7 @@ async function deliverConfiguredNotification(event, { ignoreMinimumDuration = fa
     await new Promise((resolve, reject) => chrome.notifications.create(`aih-${Date.now()}`, {
       type: "basic", iconUrl: "assets/icons/icon-128.png", title: delivery.title, message: delivery.message
     }, () => chrome.runtime.lastError ? reject(chrome.runtime.lastError) : resolve()));
-    return { provider: "browser", deliveryKind: "browser" };
+    return { provider: "browser", deliveryKind: "browser", ...timeStatus };
   }
   await appendNotificationDebug({
     traceId, stage: "http-send", provider, deliveryKind: "http", endpointHost: safeEndpointRef(delivery.url)
@@ -250,5 +291,5 @@ async function deliverConfiguredNotification(event, { ignoreMinimumDuration = fa
     throw new Error(`通知请求失败：HTTP ${response.status}${detail ? ` · ${detail}` : ""}`);
   }
   model.validateResponse?.(config.provider, responseText);
-  return { provider, deliveryKind: "http", httpStatus: response.status };
+  return { provider, deliveryKind: "http", httpStatus: response.status, ...timeStatus };
 }

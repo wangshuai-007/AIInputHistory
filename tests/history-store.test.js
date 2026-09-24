@@ -75,12 +75,14 @@ test("设置值被限制在安全范围", () => {
   const settings = sanitizeSettings({ historyLimit: 9999, enterLimit: 0, snapshotMinutes: "5" });
   assert.deepEqual(JSON.parse(JSON.stringify(settings)), {
     historyLimit: 500, sendLimit: 1, snapshotSeconds: 300, shortcut: "Ctrl+R", language: "zh-CN", launcherEnabled: true, trackRequestTime: false,
-    completionNotification: { enabled: false, provider: "browser", minDurationSeconds: 20, barkUrl: "", serverChanKey: "", pushPlusToken: "", ntfyUrl: "https://ntfy.sh", ntfyTopic: "", gotifyUrl: "", gotifyToken: "", dingtalkWebhook: "", feishuWebhook: "", wecomWebhook: "", customMethod: "POST", customUrl: "", customHeaders: "{}", customBody: '{"title":"{{title}}","message":"{{message}}"}' },
+    completionNotification: { enabled: false, provider: "browser", minDurationSeconds: 20, availableTimes: [], barkUrl: "", serverChanKey: "", pushPlusToken: "", ntfyUrl: "https://ntfy.sh", ntfyTopic: "", gotifyUrl: "", gotifyToken: "", dingtalkWebhook: "", feishuWebhook: "", wecomWebhook: "", customMethod: "POST", customUrl: "", customHeaders: "{}", customBody: '{"title":"{{title}}","message":"{{message}}"}' },
     customDomains: []
   });
   assert.equal(sanitizeSettings({ snapshotSeconds: 5 }).snapshotSeconds, 5);
   assert.equal(sanitizeSettings({ completionNotification: { minDurationSeconds: -5 } }).completionNotification.minDurationSeconds, 0);
   assert.equal(sanitizeSettings({ completionNotification: { minDurationSeconds: 9999 } }).completionNotification.minDurationSeconds, 3600);
+  const times = sanitizeSettings({ completionNotification: { availableTimes: [{ start: "08:30", end: "12:00" }, { start: "22:00", end: "02:00" }, { start: "99:00", end: "10:00" }, { start: "08:30", end: "12:00" }] } }).completionNotification.availableTimes;
+  assert.deepEqual(JSON.parse(JSON.stringify(times)), [{ start: "08:30", end: "12:00" }, { start: "22:00", end: "02:00" }]);
 });
 
 test("快捷键支持自定义、匹配和停用", () => {

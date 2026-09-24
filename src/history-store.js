@@ -8,7 +8,7 @@
   const PROMPT_QUEUE_KEY = "aiInputHistoryPromptQueues";
   const DEFAULT_SHORTCUT = "Ctrl+R";
   const DEFAULT_COMPLETION_NOTIFICATION = Object.freeze({
-    enabled: false, provider: "browser", minDurationSeconds: 20, barkUrl: "", serverChanKey: "", pushPlusToken: "",
+    enabled: false, provider: "browser", minDurationSeconds: 20, availableTimes: [], barkUrl: "", serverChanKey: "", pushPlusToken: "",
     ntfyUrl: "https://ntfy.sh", ntfyTopic: "", gotifyUrl: "", gotifyToken: "",
     dingtalkWebhook: "", feishuWebhook: "", wecomWebhook: "",
     customMethod: "POST", customUrl: "", customHeaders: "{}",
@@ -43,6 +43,20 @@
     };
   }
 
+  function sanitizeAvailableTimes(value) {
+    const source = Array.isArray(value) ? value : [];
+    const seen = new Set();
+    return source.map((range) => {
+      const start = String(range?.start || "").trim();
+      const end = String(range?.end || "").trim();
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(end)) return null;
+      const key = `${start}-${end}`;
+      if (seen.has(key)) return null;
+      seen.add(key);
+      return { start, end };
+    }).filter(Boolean).slice(0, 12);
+  }
+
   function sanitizeCompletionNotification(value) {
     const source = value && typeof value === "object" ? value : {};
     const providers = new Set(["browser", "bark", "serverchan", "pushplus", "ntfy", "gotify", "dingtalk", "feishu", "wecom", "custom"]);
@@ -53,6 +67,7 @@
       enabled: source.enabled === true,
       provider: providers.has(source.provider) ? source.provider : DEFAULT_COMPLETION_NOTIFICATION.provider,
       minDurationSeconds: clampInteger(source.minDurationSeconds, 0, 3600, DEFAULT_COMPLETION_NOTIFICATION.minDurationSeconds),
+      availableTimes: sanitizeAvailableTimes(source.availableTimes),
       barkUrl: text("barkUrl", 1000), serverChanKey: text("serverChanKey", 300), pushPlusToken: text("pushPlusToken", 300),
       ntfyUrl: text("ntfyUrl", 1000, DEFAULT_COMPLETION_NOTIFICATION.ntfyUrl), ntfyTopic: text("ntfyTopic", 300),
       gotifyUrl: text("gotifyUrl", 1000), gotifyToken: text("gotifyToken", 300),
@@ -591,5 +606,5 @@
   namespace.DEFAULT_COMPLETION_NOTIFICATION = DEFAULT_COMPLETION_NOTIFICATION;
   namespace.HistoryStore = HistoryStore;
   namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY, pinnedIndex: PINNED_INDEX_KEY, conversationStats: CONVERSATION_STATS_KEY, promptQueue: PROMPT_QUEUE_KEY };
-  namespace.historyModel = { collapseSnapshotsForSend, compactSentSnapshots, filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeCompletionNotification, sanitizePromptQueueItem, sanitizePromptQueues, sanitizeSettings, shortcutFromEvent };
+  namespace.historyModel = { collapseSnapshotsForSend, compactSentSnapshots, filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeAvailableTimes, sanitizeCompletionNotification, sanitizePromptQueueItem, sanitizePromptQueues, sanitizeSettings, shortcutFromEvent };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

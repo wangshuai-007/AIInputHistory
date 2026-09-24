@@ -18,6 +18,8 @@ test("ChatGPT 专属设置集中在独立分组框中", () => {
   assert.match(chatgptBlock, /chatgpt\.title/);
   assert.match(chatgptBlock, /trackRequestTime/);
   assert.match(chatgptBlock, /notifyEnabled/);
+  assert.match(chatgptBlock, /notifyAvailableTimes/);
+  assert.match(chatgptBlock, /addNotifyAvailableTime/);
   assert.ok(chatgptBlock.indexOf("trackRequestTime") < chatgptBlock.indexOf("notifyEnabled"));
 });
 
@@ -43,7 +45,7 @@ function element() {
 test("修改自动快照秒数时无需关闭输入框即可立即保存", async () => {
   const elements = Object.fromEntries([
     "#historyLimit", "#sendLimit", "#snapshotSeconds", "#launcherEnabled", "#domainInput", "#trackRequestTime",
-    "#notifyEnabled", "#notifyProvider", "#notifyMinDurationSeconds", "#testNotification", "#notifyBarkUrl", "#notifyServerChanKey", "#notifyPushPlusToken",
+    "#notifyEnabled", "#notifyProvider", "#notifyMinDurationSeconds", "#notifyAvailableTimes", "#addNotifyAvailableTime", "#testNotification", "#notifyBarkUrl", "#notifyServerChanKey", "#notifyPushPlusToken",
     "#notifyNtfyUrl", "#notifyNtfyTopic", "#notifyGotifyUrl", "#notifyGotifyToken", "#notifyDingtalkWebhook", "#notifyFeishuWebhook", "#notifyWecomWebhook", "#notifyCustomMethod", "#notifyCustomUrl", "#notifyCustomHeaders", "#notifyCustomBody",
     "#notificationDebugLog", "#refreshNotificationDebug", "#copyNotificationDebug", "#clearNotificationDebug",
     "#clearConversationStats", "#conversationStatsList", "#conversationActivePeriods", "#conversationTotal", "#conversationToday", "#conversationWeek", "#conversationMonth",
@@ -57,7 +59,7 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
     async getSettings() {
       return {
         historyLimit: 100, sendLimit: 10, snapshotSeconds: 60, shortcut: "Ctrl+R", language: "zh-CN", launcherEnabled: true, trackRequestTime: false,
-        completionNotification: { enabled: false, provider: "browser", minDurationSeconds: 20, barkUrl: "", serverChanKey: "", pushPlusToken: "", ntfyUrl: "https://ntfy.sh", ntfyTopic: "", gotifyUrl: "", gotifyToken: "", dingtalkWebhook: "", feishuWebhook: "", wecomWebhook: "", customMethod: "POST", customUrl: "", customHeaders: "{}", customBody: '{"title":"{{title}}","message":"{{message}}"}' },
+        completionNotification: { enabled: false, provider: "browser", minDurationSeconds: 20, availableTimes: [], barkUrl: "", serverChanKey: "", pushPlusToken: "", ntfyUrl: "https://ntfy.sh", ntfyTopic: "", gotifyUrl: "", gotifyToken: "", dingtalkWebhook: "", feishuWebhook: "", wecomWebhook: "", customMethod: "POST", customUrl: "", customHeaders: "{}", customBody: '{"title":"{{title}}","message":"{{message}}"}' },
         customDomains: []
       };
     }
@@ -101,6 +103,7 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
 
   assert.equal(elements["#notifyProvider"].disabled, true);
   assert.equal(elements["#notifyMinDurationSeconds"].disabled, true);
+  assert.equal(elements["#addNotifyAvailableTime"].disabled, true);
   assert.equal(elements["#notifyMinDurationSeconds"].value, 20);
   assert.equal(elements["#testNotification"].disabled, true);
   assert.equal(elements["#notifyNtfyUrl"].disabled, true);
@@ -141,6 +144,7 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
   assert.equal(saves.at(-1).completionNotification.provider, "browser");
   assert.equal(elements["#notifyProvider"].disabled, false);
   assert.equal(elements["#notifyMinDurationSeconds"].disabled, false);
+  assert.equal(elements["#addNotifyAvailableTime"].disabled, false);
   assert.equal(elements["#testNotification"].disabled, false);
   assert.equal(elements["#notifyNtfyUrl"].disabled, false);
 
@@ -154,6 +158,7 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(elements["#notifyProvider"].disabled, true);
   assert.equal(elements["#notifyMinDurationSeconds"].disabled, true);
+  assert.equal(elements["#addNotifyAvailableTime"].disabled, true);
   assert.equal(elements["#testNotification"].disabled, true);
   assert.equal(elements["#notifyNtfyUrl"].disabled, true);
 

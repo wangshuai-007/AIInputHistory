@@ -9,6 +9,8 @@
   const notifyToggle = document.querySelector("#notifyEnabled");
   const notifyProvider = document.querySelector("#notifyProvider");
   const testNotificationButton = document.querySelector("#testNotification");
+  const notifyAvailableTimesList = document.querySelector("#notifyAvailableTimes");
+  const addNotifyAvailableTimeButton = document.querySelector("#addNotifyAvailableTime");
   const notificationDebugLog = document.querySelector("#notificationDebugLog");
   const refreshNotificationDebugButton = document.querySelector("#refreshNotificationDebug");
   const copyNotificationDebugButton = document.querySelector("#copyNotificationDebug");
@@ -52,6 +54,9 @@
   notifyToggle.addEventListener("change", changeNotificationEnabled);
   notifyProvider.addEventListener("change", changeNotificationProvider);
   Object.values(notificationInputs).forEach((selector) => document.querySelector(selector).addEventListener("change", saveNotificationConfig));
+  addNotifyAvailableTimeButton.addEventListener("click", addNotificationTimeRange);
+  notifyAvailableTimesList.addEventListener("change", saveNotificationConfig);
+  notifyAvailableTimesList.addEventListener("click", removeNotificationTimeRange);
   testNotificationButton.addEventListener("click", testNotification);
   refreshNotificationDebugButton.addEventListener("click", loadNotificationDebugLog);
   copyNotificationDebugButton.addEventListener("click", copyNotificationDebugLog);
@@ -125,6 +130,7 @@
     languageSelect.value = namespace.i18n.language();
     renderDomains();
     renderConversationStats();
+    renderAvailableTimes(settings.completionNotification?.availableTimes || []);
     if (!capturingShortcut) renderShortcut(settings.shortcut);
   }
 
@@ -134,6 +140,7 @@
     return {
       ...current, enabled: notifyToggle.checked, provider: notifyProvider.value,
       minDurationSeconds: value("minDurationSeconds"),
+      availableTimes: collectAvailableTimes(),
       barkUrl: value("barkUrl"), serverChanKey: value("serverChanKey"), pushPlusToken: value("pushPlusToken"),
       ntfyUrl: value("ntfyUrl"), ntfyTopic: value("ntfyTopic"), gotifyUrl: value("gotifyUrl"), gotifyToken: value("gotifyToken"),
       dingtalkWebhook: value("dingtalkWebhook"), feishuWebhook: value("feishuWebhook"), wecomWebhook: value("wecomWebhook"),
@@ -142,11 +149,55 @@
     };
   }
 
+  function collectAvailableTimes() {
+    const rows = [...(notifyAvailableTimesList.querySelectorAll?.(".notify-time-row") || [])];
+    return rows.map((row) => ({
+      start: row.querySelector("[data-notify-time-start]")?.value || "",
+      end: row.querySelector("[data-notify-time-end]")?.value || ""
+    })).filter((range) => range.start && range.end);
+  }
+
+  function renderAvailableTimes(ranges) {
+    const normalized = namespace.historyModel.sanitizeAvailableTimes?.(ranges) || [];
+    notifyAvailableTimesList.innerHTML = "";
+    if (!normalized.length) {
+      const empty = document.createElement("div");
+      empty.className = "notify-time-empty";
+      empty.textContent = namespace.i18n.t("notify.allDay");
+      notifyAvailableTimesList.appendChild(empty);
+    } else {
+      normalized.forEach((range) => {
+        const row = document.createElement("div");
+        row.className = "notify-time-row";
+        row.innerHTML = `<input type="time" data-notify-time-start value="${range.start}"><span>–</span><input type="time" data-notify-time-end value="${range.end}"><button type="button" data-notify-time-remove aria-label="${namespace.i18n.t("notify.removeTime")}">×</button>`;
+        notifyAvailableTimesList.appendChild(row);
+      });
+    }
+    const enabled = notifyToggle.checked;
+    notifyAvailableTimesList.querySelectorAll?.("input,button").forEach((control) => { control.disabled = !enabled; });
+    addNotifyAvailableTimeButton.disabled = !enabled || normalized.length >= 12;
+  }
+
+  function addNotificationTimeRange() {
+    const current = collectAvailableTimes();
+    if (current.length >= 12) return;
+    renderAvailableTimes([...current, { start: "09:00", end: "18:00" }]);
+    saveNotificationConfig();
+  }
+
+  function removeNotificationTimeRange(event) {
+    const button = event.target?.closest?.("[data-notify-time-remove]");
+    if (!button) return;
+    button.closest(".notify-time-row")?.remove();
+    saveNotificationConfig();
+  }
+
   function renderNotificationSettings() {
     const config = settings.completionNotification || { enabled: false, provider: "browser" };
     notifyToggle.checked = config.enabled === true;
     notifyProvider.value = config.provider || "browser";
     Object.entries(notificationInputs).forEach(([name, selector]) => { document.querySelector(selector).value = config[name] ?? ""; });
+    renderAvailableTimes(config.availableTimes || []);
     setNotificationControlsEnabled(config.enabled === true);
     document.querySelectorAll("[data-notify-provider]").forEach((section) => {
       const active = section.dataset.notifyProvider === notifyProvider.value;
@@ -157,7 +208,9 @@
   function setNotificationControlsEnabled(enabled) {
     notifyProvider.disabled = !enabled;
     testNotificationButton.disabled = !enabled;
+    addNotifyAvailableTimeButton.disabled = !enabled || collectAvailableTimes().length >= 12;
     Object.values(notificationInputs).forEach((selector) => { document.querySelector(selector).disabled = !enabled; });
+    notifyAvailableTimesList.querySelectorAll?.("input,button").forEach((control) => { control.disabled = !enabled; });
   }
 
   function renderNotificationSettingsPreview() {
