@@ -23,7 +23,7 @@ Key features:
 - English and Chinese interfaces, dark mode, custom shortcuts, and a movable floating button; right-click an active timer to stop a stuck observation;
 - Track total conversations, today, this week, this month, and cumulative active days/weeks/months separately for each AI, with an independent clear action;
 - Queue prompts while ChatGPT is replying, with edit, withdraw, and Send now actions; withdrawing restores the prompt to the composer, and Queue actions do not disable Up/Down history navigation; queued prompts send in order after the previous reply completes, and failed items do not permanently block later prompts;
-- Track ChatGPT send-to-completion duration and optionally notify when a reply completes;
+- Track ChatGPT send-to-completion duration and optionally notify when a reply completes; version 1.31.3 adds compatibility with the latest assistant-turn/composer DOM so timers stop correctly after a reply finishes;
 - Filter automatic completion notifications by minimum duration (20 seconds by default) and multiple local-time availability ranges, including overnight ranges, with a local redacted debug log for troubleshooting;
 - Notifications support browser/system notifications, Bark, ServerChan, PushPlus, ntfy, Gotify, DingTalk, Feishu, WeCom robots, and custom HTTP requests;
 - Clear all local history with an explicit confirmation step.

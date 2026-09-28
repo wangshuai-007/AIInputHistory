@@ -32,12 +32,22 @@
 
   function userTurns() {
     const scope = document.querySelector("main") || document;
-    const nodes = [...scope.querySelectorAll('[data-message-author-role="user"]')];
-    return nodes.map((node, index) => {
-      const turn = node.closest('article,[data-testid^="conversation-turn-"]') || node;
-      const key = node.getAttribute("data-message-id") || turn.getAttribute?.("data-testid") || `user-index:${index}`;
-      return { key, text: normalizePromptText(node.textContent) };
-    });
+    const markers = [...scope.querySelectorAll('[data-message-author-role="user"],[data-user-message-bubble]')];
+    const seenTurns = new Set();
+    const turns = [];
+    for (const marker of markers) {
+      const turn = marker.closest('[data-turn-key],[data-testid^="conversation-turn-"],article') || marker;
+      if (seenTurns.has(turn)) continue;
+      seenTurns.add(turn);
+      const body = turn.querySelector?.('[data-user-message-bubble],[data-message-author-role="user"]') || marker;
+      const groupKey = turn.getAttribute?.("data-turn-key");
+      const key = body.getAttribute?.("data-message-id")
+        || turn.getAttribute?.("data-turn-id")
+        || turn.getAttribute?.("data-testid")
+        || (groupKey ? `user-group:${groupKey}` : `user-index:${turns.length}`);
+      turns.push({ key, text: normalizePromptText(body.textContent) });
+    }
+    return turns;
   }
 
   function queueStyle() {
@@ -98,7 +108,7 @@
         this.scheduleDrain(0);
         this.reposition();
       });
-      this.observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["disabled", "aria-disabled", "data-is-streaming", "aria-label", "data-testid"] });
+      this.observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["disabled", "aria-disabled", "data-is-streaming", "aria-label", "data-testid", "data-turn-key", "data-message-author-role", "data-conversation-role", "data-user-message-bubble"] });
       this.storageListener = (changes, areaName) => {
         if (areaName === "local" && changes[namespace.STORAGE_KEYS.promptQueue]) this.refresh().catch(() => {});
       };
@@ -467,6 +477,7 @@
         "button[data-testid='send-button']",
         "button[data-testid*='send-button']",
         "button.composer-submit-btn",
+        "form[data-chatgpt-composer] button[type='submit']",
         "button[aria-label='Send prompt']",
         "button[aria-label='Send message']",
         "button[aria-label='发送提示词']",

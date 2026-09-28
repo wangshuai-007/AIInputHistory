@@ -18,6 +18,12 @@ AI Input History 1.31.0 起支持 ChatGPT Queue。当前一轮仍在生成时，
 如果 RequestTiming 因网页状态异常长期未结束，但页面已经没有生成状态且最后回复明确完成，超过 2 分钟后 Queue 不再让该旧计时阻塞新的直接发送或自动出队。也可以右键悬浮计时按钮选择“停止计时”手动清除当前观察状态。
 
 
+## 1.31.3 修复
+
+- 兼容 ChatGPT 新版 `section[data-turn="assistant"]` 回复结构，Queue 能再次正确感知上一轮回复已经结束。
+- 兼容新版 `data-turn-key` / `data-conversation-role` 分组结构，以及 composer 内新的发送与停止按钮。
+- 修复 ChatGPT 已经回复完成，但旧 DOM 选择器未识别到 assistant turn，导致计时持续、Queue 长时间仍判断为生成中的问题。
+
 ## 1.31.2 增强
 
 - 当前 GPT 回复尚未结束、下一次发送会进入 Queue 时，会在 **ChatGPT 主输入框上方** 提前显示绿色状态标识“下一条将加入队列”，避免把排队误认为直接发送。

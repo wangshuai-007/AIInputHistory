@@ -238,35 +238,82 @@
       childList: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ["disabled", "aria-disabled", "data-is-streaming", "data-testid", "aria-label"]
+      attributeFilter: ["disabled", "aria-disabled", "data-is-streaming", "data-testid", "aria-label", "data-turn-key", "data-turn", "data-message-author-role", "data-conversation-role", "data-chatgpt-agent-turn-start"]
     });
     return observer;
   }
 
-  /** Reads ChatGPT's new assistant turns and completion controls; no response content is persisted. */
+  /** Reads ChatGPT's legacy and grouped assistant turns; no response content is persisted. */
   function sampleChatGPT() {
     const scope = document.querySelector("main") || document;
-    const busy = [...document.querySelectorAll('[data-testid="stop-button"],button[aria-label="Stop streaming"],button[aria-label="停止生成"],[data-is-streaming="true"]')].some(visible);
-    const ready = [...document.querySelectorAll('[data-testid="send-button"],button[aria-label="Send prompt"],button[aria-label="Send message"],button[aria-label="发送提示词"],button[aria-label="发送消息"]')]
+    const busySelector = [
+      '[data-testid="stop-button"]',
+      'button[aria-label="Stop streaming"]',
+      'button[aria-label="停止生成"]',
+      '[data-is-streaming="true"]',
+      'form[data-chatgpt-composer] button[type="button"][aria-label="Stop"]'
+    ].join(",");
+    const readySelector = [
+      '[data-testid="send-button"]',
+      'button[aria-label="Send prompt"]',
+      'button[aria-label="Send message"]',
+      'button[aria-label="发送提示词"]',
+      'button[aria-label="发送消息"]',
+      'form[data-chatgpt-composer] button[type="submit"]'
+    ].join(",");
+    const busy = [...document.querySelectorAll(busySelector)].some(visible);
+    const ready = [...document.querySelectorAll(readySelector)]
       .some((button) => visible(button) && !button.matches("[disabled],[aria-disabled='true']"));
-    const assistantNodes = [...scope.querySelectorAll('[data-message-author-role="assistant"]')].filter(visible);
-    const replies = assistantNodes.slice(-3).map((node) => {
-      const turn = node.closest('article,[data-testid^="conversation-turn-"]') || node;
-      const ordinal = assistantNodes.indexOf(node);
-      const key = node.getAttribute("data-message-id") || turn.getAttribute?.("data-testid") || `assistant-index:${ordinal}`;
-      const actionControls = [...turn.querySelectorAll("button,[role='button']")].filter((control) => !node.contains(control) && visible(control));
+
+    const assistantMarkers = [...scope.querySelectorAll([
+      '[data-turn="assistant"]',
+      '[data-message-author-role="assistant"]',
+      '[data-conversation-role="assistant"]',
+      '[data-chatgpt-agent-turn-start]'
+    ].join(","))];
+    const seenTurns = new Set();
+    const assistantTurns = [];
+    for (const marker of assistantMarkers) {
+      const turn = marker.closest('[data-turn-key],[data-testid^="conversation-turn-"],article') || marker;
+      if (seenTurns.has(turn)) continue;
+      const roleNode = turn.querySelector?.('[data-conversation-role="assistant"],[data-message-author-role="assistant"]') || null;
+      const contentNode = roleNode || (marker.matches?.('[data-chatgpt-agent-turn-start]') ? turn : marker);
+      if (!visible(contentNode)) continue;
+      seenTurns.add(turn);
+      assistantTurns.push({ marker, turn, contentNode });
+    }
+
+    const replies = assistantTurns.slice(-3).map(({ marker, turn, contentNode }, localIndex) => {
+      const groupKey = turn.getAttribute?.("data-turn-key");
+      const ordinal = assistantTurns.length - Math.min(3, assistantTurns.length) + localIndex;
+      const key = contentNode.getAttribute?.("data-message-id")
+        || turn.getAttribute?.("data-turn-id")
+        || turn.getAttribute?.("data-testid")
+        || (groupKey ? `assistant-group:${groupKey}` : `assistant-index:${ordinal}`);
+      const anchor = roleNodeForTurn(turn) || marker;
+      const grouped = Boolean(groupKey);
+      const actionControls = [...turn.querySelectorAll("button,[role='button']")].filter((control) => {
+        if (!visible(control)) return false;
+        if (!grouped || typeof anchor?.compareDocumentPosition !== "function") return !contentNode.contains(control);
+        return Boolean(anchor.compareDocumentPosition(control) & 4);
+      });
       const complete = actionControls.some((control) => {
+        if (control.matches?.('button[data-testid="copy-turn-action-button"],.turn-action-controls button')) return true;
         const signal = [control.getAttribute("data-testid"), control.getAttribute("aria-label"), control.getAttribute("title"), control.textContent]
           .filter(Boolean).join(" ");
         return /(copy.*(turn|response)|good.*response|bad.*response|thumb|regenerate|retry|复制|赞|踩|重新生成|重试)/i.test(signal);
       });
-      const text = node.textContent.trim();
+      const text = contentNode.textContent.trim();
       const activity = textFingerprint(text);
       return { key, nonempty: Boolean(text), complete, activity };
     });
     const errors = [...scope.querySelectorAll('[data-testid="conversation-turn-error"]')].filter(visible)
-      .map((node, index) => node.getAttribute("data-message-id") || node.closest('[data-testid^="conversation-turn-"]')?.getAttribute("data-testid") || `error-index:${index}`);
+      .map((node, index) => node.getAttribute("data-message-id") || node.closest('[data-testid^="conversation-turn-"],[data-turn-key]')?.getAttribute("data-testid") || `error-index:${index}`);
     return { path: location.pathname, busy, ready, replies, errors };
+  }
+
+  function roleNodeForTurn(turn) {
+    return turn?.querySelector?.('[data-conversation-role="assistant"],[data-message-author-role="assistant"]') || null;
   }
 
   namespace.RequestTiming = RequestTiming;

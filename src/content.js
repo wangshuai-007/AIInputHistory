@@ -322,7 +322,7 @@
   function handleSendControl(event) {
     const path = event.composedPath();
     if (activeInput && path.includes(activeInput)) historyNavigator.interrupt();
-    const stop = path.some((node) => node?.matches?.('[data-testid="stop-button"],button[aria-label="Stop streaming"],button[aria-label="停止生成"]'));
+    const stop = path.some((node) => node?.matches?.('[data-testid="stop-button"],button[aria-label="Stop streaming"],button[aria-label="停止生成"],form[data-chatgpt-composer] button[type="button"][aria-label="Stop"]'));
     if (stop && (event.button == null || event.button === 0)) {
       sendDetector.cancelEnter();
       requestTiming.finish("cancelled");
