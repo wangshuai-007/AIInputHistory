@@ -66,9 +66,10 @@
   }
 
   class PromptQueue {
-    constructor({ store, adapter, getInput, isRequestActive = () => false, getRequestStartedAt = () => 0, dispatchTimeoutMs = DISPATCH_TIMEOUT_MS }) {
+    constructor({ store, adapter, getInput, isRequestActive = () => false, getRequestStartedAt = () => 0, dispatchTimeoutMs = DISPATCH_TIMEOUT_MS, enabled = true }) {
       Object.assign(this, { store, adapter, getInput, isRequestActive, getRequestStartedAt, dispatchTimeoutMs });
-      this.enabled = supportedSite();
+      this.supported = supportedSite();
+      this.enabled = this.supported && enabled !== false;
       this.key = currentQueueKey();
       this.items = [];
       this.editingId = "";
@@ -98,7 +99,7 @@
     }
 
     async init() {
-      if (!this.enabled) return;
+      if (!this.supported) return;
       this.items = await this.store.getPromptQueue(this.key);
       this.ensureHost();
       this.render();
@@ -118,6 +119,24 @@
       this.scheduleDrain(0);
     }
 
+    setEnabled(enabled) {
+      const next = this.supported && enabled !== false;
+      if (this.enabled === next) {
+        this.render();
+        return this.enabled;
+      }
+      this.enabled = next;
+      clearTimeout(this.drainTimer);
+      if (!this.enabled) {
+        this.resetDispatchState();
+        this.sawPageBusy = false;
+        this.render();
+      } else {
+        this.refresh().catch((error) => console.warn("[AI 输入历史] 恢复排队失败", error));
+      }
+      return this.enabled;
+    }
+
     ensureHost() {
       if (this.host?.isConnected) return;
       this.host = document.createElement("div");
@@ -129,7 +148,7 @@
     }
 
     async refresh() {
-      if (!this.enabled) return;
+      if (!this.supported) return;
       await this.syncConversationKey();
       this.items = await this.store.getPromptQueue(this.key);
       if (this.dispatchingId && !this.items.some((item) => item.id === this.dispatchingId)) this.resetDispatchState();
@@ -140,7 +159,7 @@
     render() {
       if (!this.shadow) return;
       const section = this.shadow.querySelector(".queue");
-      section.classList.toggle("hidden", this.items.length === 0);
+      section.classList.toggle("hidden", !this.enabled || this.items.length === 0);
       this.shadow.querySelector(".title").textContent = namespace.i18n.t("queue.title");
       this.shadow.querySelector(".count").textContent = namespace.i18n.t("queue.count", { count: this.items.length });
       this.shadow.querySelector(".items").innerHTML = this.items.map((item, index) => this.itemMarkup(item, index)).join("");
@@ -229,6 +248,7 @@
     }
 
     async sendNow(id) {
+      if (!this.enabled) return false;
       await this.syncConversationKey();
       const item = this.items.find((entry) => entry.id === id);
       if (!item) return false;
@@ -353,6 +373,7 @@
     }
 
     async enqueueFromInput(input) {
+      if (!this.enabled) return false;
       await this.syncConversationKey();
       const text = this.adapter.getText(input);
       if (!text.trim()) return false;
@@ -371,9 +392,9 @@
       this.drainTimer = setTimeout(() => this.tryDrain().catch((error) => console.warn("[AI 输入历史] 排队发送失败", error)), delay);
     }
     async tryDrain() {
-      if (!this.items.length || this.editingId || this.dispatchingId || !this.canDrain()) return;
+      if (!this.enabled || !this.items.length || this.editingId || this.dispatchingId || !this.canDrain()) return;
       await this.syncConversationKey();
-      if (!this.items.length || !this.canDrain()) return;
+      if (!this.enabled || !this.items.length || !this.canDrain()) return;
       const input = this.getInput?.() || this.adapter.findComposer(document, this.shadow);
       if (!input?.isConnected) return;
       if (this.adapter.getText(input).trim()) return;
@@ -391,7 +412,7 @@
     }
 
     continueDispatch(input, itemId) {
-      if (this.dispatchingId !== itemId) return;
+      if (!this.enabled || this.dispatchingId !== itemId) return;
       if (this.dispatchStartedAt && Date.now() - this.dispatchStartedAt >= this.dispatchTimeoutMs) {
         this.markDispatchFailed(input, itemId);
         return;
@@ -426,7 +447,7 @@
     }
 
     verifyDispatch(input, itemId) {
-      if (this.dispatchingId !== itemId) return;
+      if (!this.enabled || this.dispatchingId !== itemId) return;
       if (this.dispatchStartedAt && Date.now() - this.dispatchStartedAt >= this.dispatchTimeoutMs) {
         this.markDispatchFailed(input, itemId);
         return;

@@ -41,6 +41,8 @@
       this.launcherTooltip = this.shadow.querySelector(".launcher-tooltip");
       this.launcherMenu = this.shadow.querySelector(".launcher-menu");
       this.stopTimingHandler = null;
+      this.queueToggleHandler = null;
+      this.queueEnabled = true;
       this.timingView = new namespace.RequestTimingView(this);
       this.clearConfirmation = new namespace.ClearConfirmation(this.shadow, () => this.clearHistory());
       this.bindEvents();
@@ -57,6 +59,7 @@
       </button>
       <div class="launcher-menu hidden" role="menu">
         <button type="button" role="menuitem" data-launcher-action="hide" data-i18n="launcher.hide">隐藏悬浮按钮</button>
+        <button class="hidden" type="button" role="menuitemcheckbox" data-launcher-action="queue" aria-checked="true">禁用队列</button>
         <button type="button" role="menuitem" data-launcher-action="stop" data-i18n="timing.stop">停止计时</button>
       </div>
       <section class="panel hidden" role="dialog" data-i18n-aria-label="panel.aria" aria-label="输入历史">
@@ -103,6 +106,10 @@
         this.closeLauncherMenu();
         if (button.dataset.launcherAction === "hide") {
           this.disableLauncher().catch((error) => this.reportError(error));
+          return;
+        }
+        if (button.dataset.launcherAction === "queue") {
+          this.toggleQueue().catch((error) => this.reportError(error));
           return;
         }
         if (button.dataset.launcherAction === "stop" && this.timingView.active) this.stopTimingHandler?.();
@@ -153,6 +160,7 @@
       namespace.i18n.localize(this.shadow);
       this.siteFilter.refreshLabels();
       this.setLastSavedAt(this.lastSavedAt);
+      this.syncLauncherMenu();
       this.render();
     }
 
@@ -209,9 +217,33 @@
       this.syncLauncherMenu();
     }
 
+    setQueueToggleHandler(handler, enabled = true) {
+      this.queueToggleHandler = typeof handler === "function" ? handler : null;
+      this.queueEnabled = enabled !== false;
+      this.syncLauncherMenu();
+    }
+
+    setQueueEnabled(enabled) {
+      this.queueEnabled = enabled !== false;
+      this.syncLauncherMenu();
+    }
+
+    async toggleQueue() {
+      if (!this.queueToggleHandler) return;
+      const enabled = !this.queueEnabled;
+      const applied = await this.queueToggleHandler(enabled);
+      this.setQueueEnabled(typeof applied === "boolean" ? applied : enabled);
+    }
+
     syncLauncherMenu() {
       const stop = this.launcherMenu?.querySelector('[data-launcher-action="stop"]');
       if (stop) stop.disabled = !this.timingView?.active;
+      const queue = this.launcherMenu?.querySelector('[data-launcher-action="queue"]');
+      if (queue) {
+        queue.classList.toggle("hidden", !this.queueToggleHandler);
+        queue.textContent = namespace.i18n.t(this.queueEnabled ? "queue.disable" : "queue.enable");
+        queue.setAttribute("aria-checked", String(this.queueEnabled));
+      }
     }
 
     openLauncherMenu(x, y) {

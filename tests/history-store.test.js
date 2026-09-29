@@ -74,7 +74,7 @@ test("可读取当前网站最近一次自动保存时间", () => {
 test("设置值被限制在安全范围", () => {
   const settings = sanitizeSettings({ historyLimit: 9999, enterLimit: 0, snapshotMinutes: "5" });
   assert.deepEqual(JSON.parse(JSON.stringify(settings)), {
-    historyLimit: 500, sendLimit: 1, snapshotSeconds: 300, shortcut: "Ctrl+R", language: "zh-CN", launcherEnabled: true, trackRequestTime: false,
+    historyLimit: 500, sendLimit: 1, snapshotSeconds: 300, shortcut: "Ctrl+R", language: "zh-CN", launcherEnabled: true, queueEnabled: true, trackRequestTime: false,
     completionNotification: { enabled: false, provider: "browser", minDurationSeconds: 20, availableTimes: [], barkUrl: "", serverChanKey: "", pushPlusToken: "", ntfyUrl: "https://ntfy.sh", ntfyTopic: "", gotifyUrl: "", gotifyToken: "", dingtalkWebhook: "", feishuWebhook: "", wecomWebhook: "", customMethod: "POST", customUrl: "", customHeaders: "{}", customBody: '{"title":"{{title}}","message":"{{message}}"}' },
     customDomains: []
   });
@@ -100,6 +100,7 @@ test("自定义域名会被规范化并去重", () => {
   const settings = sanitizeSettings({ customDomains: ["Example.com", "https://www.example.com/path", "invalid"] });
   assert.deepEqual(Array.from(settings.customDomains), ["example.com"]);
   assert.equal(sanitizeSettings({ launcherEnabled: false }).launcherEnabled, false);
+  assert.equal(sanitizeSettings({ queueEnabled: false }).queueEnabled, false);
 });
 
 test("未发送草稿会出现在可搜索历史中", async () => {

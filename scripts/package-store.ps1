@@ -14,13 +14,17 @@ if (Test-Path -LiteralPath $archive) {
     Remove-Item -LiteralPath $archive -Force
 }
 
-$paths = @(
-    (Join-Path $root "manifest.json"),
-    (Join-Path $root "background.js"),
-    (Join-Path $root "src"),
-    (Join-Path $root "popup"),
-    (Join-Path $root "assets"),
-    (Join-Path $root "_locales")
-)
-Compress-Archive -LiteralPath $paths -DestinationPath $archive -CompressionLevel Optimal
+$staging = Join-Path $dist (".package-staging-{0}" -f $PID)
+try {
+    New-Item -ItemType Directory -Path $staging -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $root "manifest.json") -Destination $staging
+    Copy-Item -LiteralPath (Join-Path $root "background.js") -Destination $staging
+    foreach ($directory in @("src", "popup", "assets", "_locales")) {
+        Copy-Item -LiteralPath (Join-Path $root $directory) -Destination $staging -Recurse
+    }
+    $paths = Get-ChildItem -LiteralPath $staging | Select-Object -ExpandProperty FullName
+    Compress-Archive -LiteralPath $paths -DestinationPath $archive -CompressionLevel Optimal
+} finally {
+    Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+}
 Write-Output $archive

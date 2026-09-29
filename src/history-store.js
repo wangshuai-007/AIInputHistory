@@ -21,6 +21,7 @@
     shortcut: DEFAULT_SHORTCUT,
     language: "zh-CN",
     launcherEnabled: true,
+    queueEnabled: true,
     trackRequestTime: false,
     completionNotification: DEFAULT_COMPLETION_NOTIFICATION,
     customDomains: []
@@ -36,6 +37,7 @@
       shortcut: normalizeShortcut(source.shortcut),
       language: source.language === "en" ? "en" : "zh-CN",
       launcherEnabled: source.launcherEnabled !== false,
+      queueEnabled: source.queueEnabled !== false,
       trackRequestTime: source.trackRequestTime === true,
       completionNotification: sanitizeCompletionNotification(source.completionNotification),
       customDomains: [...new Set((Array.isArray(source.customDomains) ? source.customDomains : [])
@@ -428,67 +430,35 @@
       return state.siteIcons;
     }
 
-    async getConversationStats(now = Date.now()) {
+    async getSendStats(now = Date.now()) {
       const model = namespace.conversationStatsModel;
-      if (!model) return { all: { total: 0, today: 0, thisWeek: 0, thisMonth: 0, activeDays: 0, activeWeeks: 0, activeMonths: 0 }, rows: [] };
+      if (!model) return { all: { total: 0, today: 0, thisWeek: 0, thisMonth: 0 }, rows: [] };
       const result = await storageGet(CONVERSATION_STATS_KEY);
       return model.summarize(result[CONVERSATION_STATS_KEY], now);
     }
 
-    async recordConversationStat({ aiKey, site, conversationKey, at = Date.now() } = {}) {
+    async recordSendStat({ aiKey, site, at = Date.now() } = {}) {
       const model = namespace.conversationStatsModel;
       const key = String(aiKey || "").toLocaleLowerCase();
-      if (!model || !/^[a-z0-9:._-]{1,120}$/i.test(key) || !conversationKey || !Number.isFinite(at)) return { added: false };
+      if (!model || !/^[a-z0-9:._-]{1,120}$/i.test(key) || !Number.isFinite(at)) return false;
       return withStorageLock(async () => {
         const result = await storageGet(CONVERSATION_STATS_KEY);
         const stats = model.sanitizeStats(result[CONVERSATION_STATS_KEY]);
-        const bucket = stats.byAi[key] ||= { site: String(site || "").slice(0, 255), total: 0, days: {}, weeks: {}, months: {}, seen: {} };
-        const seenKey = model.fingerprint(`${key}|${conversationKey}`);
+        const bucket = stats.byAi[key] ||= { site: String(site || "").slice(0, 255), total: 0, days: {}, weeks: {}, months: {} };
         const periods = model.periodKeys(at);
-        const existing = bucket.seen[seenKey];
-        const isNewConversation = !existing;
-        const activity = existing || { firstAt: at, lastDay: "", lastWeek: "", lastMonth: "" };
-        const dayChanged = activity.lastDay !== periods.day;
-        const weekChanged = activity.lastWeek !== periods.week;
-        const monthChanged = activity.lastMonth !== periods.month;
-        if (!isNewConversation && !dayChanged && !weekChanged && !monthChanged) {
-          return { added: false, activityAdded: false, aiKey: key, fingerprint: seenKey };
-        }
         bucket.site ||= String(site || "").slice(0, 255);
-        if (isNewConversation) bucket.total += 1;
-        if (dayChanged) bucket.days[periods.day] = (bucket.days[periods.day] || 0) + 1;
-        if (weekChanged) bucket.weeks[periods.week] = (bucket.weeks[periods.week] || 0) + 1;
-        if (monthChanged) bucket.months[periods.month] = (bucket.months[periods.month] || 0) + 1;
-        bucket.seen[seenKey] = { firstAt: activity.firstAt, lastDay: periods.day, lastWeek: periods.week, lastMonth: periods.month };
+        bucket.total += 1;
+        bucket.days[periods.day] = (bucket.days[periods.day] || 0) + 1;
+        bucket.weeks[periods.week] = (bucket.weeks[periods.week] || 0) + 1;
+        bucket.months[periods.month] = (bucket.months[periods.month] || 0) + 1;
         await storageSet({ [CONVERSATION_STATS_KEY]: stats });
-        return { added: isNewConversation, activityAdded: true, aiKey: key, fingerprint: seenKey };
-      });
-    }
-
-    async markConversationStatSeen(aiKey, conversationKey, at = Date.now(), sourceConversationKey = "") {
-      const model = namespace.conversationStatsModel;
-      const key = String(aiKey || "").toLocaleLowerCase();
-      if (!model || !/^[a-z0-9:._-]{1,120}$/i.test(key) || !conversationKey || !Number.isFinite(at)) return false;
-      return withStorageLock(async () => {
-        const result = await storageGet(CONVERSATION_STATS_KEY);
-        const stats = model.sanitizeStats(result[CONVERSATION_STATS_KEY]);
-        const bucket = stats.byAi[key];
-        if (!bucket) return false;
-        const seenKey = model.fingerprint(`${key}|${conversationKey}`);
-        if (!Object.prototype.hasOwnProperty.call(bucket.seen, seenKey)) {
-          const sourceKey = sourceConversationKey ? model.fingerprint(`${key}|${sourceConversationKey}`) : "";
-          const source = sourceKey ? bucket.seen[sourceKey] : null;
-          const periods = model.periodKeys(at);
-          bucket.seen[seenKey] = source ? { ...source } : { firstAt: at, lastDay: periods.day, lastWeek: periods.week, lastMonth: periods.month };
-          await storageSet({ [CONVERSATION_STATS_KEY]: stats });
-        }
         return true;
       });
     }
 
-    async clearConversationStats() {
+    async clearSendStats() {
       const model = namespace.conversationStatsModel;
-      await withStorageLock(() => storageSet({ [CONVERSATION_STATS_KEY]: model?.initialStats?.() || { version: 1, byAi: {} } }));
+      await withStorageLock(() => storageSet({ [CONVERSATION_STATS_KEY]: model?.initialStats?.() || { version: 2, byAi: {} } }));
     }
 
     async getPromptQueue(queueKey) {
@@ -605,6 +575,6 @@
   namespace.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
   namespace.DEFAULT_COMPLETION_NOTIFICATION = DEFAULT_COMPLETION_NOTIFICATION;
   namespace.HistoryStore = HistoryStore;
-  namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY, pinnedIndex: PINNED_INDEX_KEY, conversationStats: CONVERSATION_STATS_KEY, promptQueue: PROMPT_QUEUE_KEY };
+  namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY, pinnedIndex: PINNED_INDEX_KEY, sendStats: CONVERSATION_STATS_KEY, conversationStats: CONVERSATION_STATS_KEY, promptQueue: PROMPT_QUEUE_KEY };
   namespace.historyModel = { collapseSnapshotsForSend, compactSentSnapshots, filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeAvailableTimes, sanitizeCompletionNotification, sanitizePromptQueueItem, sanitizePromptQueues, sanitizeSettings, shortcutFromEvent };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

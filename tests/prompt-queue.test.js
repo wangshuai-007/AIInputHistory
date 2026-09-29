@@ -77,6 +77,18 @@ test("Queue 只对 ChatGPT 站点启用", () => {
   assert.equal(model.supportedSite("example.com"), false);
 });
 
+test("禁用 Queue 后回复进行中也直接放行，重新启用后恢复排队", () => {
+  const { store, PromptQueue, namespace } = setup();
+  namespace.requestTimingModel = { sampleChatGPT: () => ({ busy: true }) };
+  const queue = new PromptQueue({ store, adapter: {}, getInput: () => null, isRequestActive: () => true, enabled: false });
+  assert.equal(queue.enabled, false);
+  assert.equal(queue.shouldQueue(), false, "禁用时即使 GPT 正在回复也不能入队");
+  queue.setEnabled(true);
+  assert.equal(queue.enabled, true);
+  assert.equal(queue.shouldQueue(), true, "重新启用后应恢复原排队判断");
+  queue.setEnabled(false);
+  assert.equal(queue.shouldQueue(), false);
+});
 
 test("计时仍活跃但页面已经完成时，Queue 不应被旧计时状态卡住", () => {
   const { store, PromptQueue, namespace } = setup();

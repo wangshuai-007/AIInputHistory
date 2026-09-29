@@ -31,8 +31,7 @@
   const clearDialogError = document.querySelector("#clearDialogError");
   const clearConversationStatsButton = document.querySelector("#clearConversationStats");
   const conversationStatsList = document.querySelector("#conversationStatsList");
-  const conversationActivePeriods = document.querySelector("#conversationActivePeriods");
-  let [settings, state, conversationStats] = await Promise.all([store.getSettings(), store.getState(), store.getConversationStats()]);
+  let [settings, state, conversationStats] = await Promise.all([store.getSettings(), store.getState(), store.getSendStats()]);
   namespace.i18n.setLanguage(settings.language);
   let saveQueue = Promise.resolve();
   let statusTimer = null;
@@ -81,8 +80,8 @@
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes[namespace.STORAGE_KEYS.state]?.newValue) renderStats(changes[namespace.STORAGE_KEYS.state].newValue);
-    if (changes[namespace.STORAGE_KEYS.conversationStats]?.newValue) {
-      conversationStats = namespace.conversationStatsModel.summarize(changes[namespace.STORAGE_KEYS.conversationStats].newValue);
+    if (changes[namespace.STORAGE_KEYS.sendStats]?.newValue) {
+      conversationStats = namespace.conversationStatsModel.summarize(changes[namespace.STORAGE_KEYS.sendStats].newValue);
       renderConversationStats();
     }
     const next = changes[namespace.STORAGE_KEYS.settings]?.newValue;
@@ -450,14 +449,11 @@
   }
 
   function renderConversationStats() {
-    const all = conversationStats?.all || { total: 0, today: 0, thisWeek: 0, thisMonth: 0, activeDays: 0, activeWeeks: 0, activeMonths: 0 };
+    const all = conversationStats?.all || { total: 0, today: 0, thisWeek: 0, thisMonth: 0 };
     document.querySelector("#conversationTotal").textContent = all.total;
     document.querySelector("#conversationToday").textContent = all.today;
     document.querySelector("#conversationWeek").textContent = all.thisWeek;
     document.querySelector("#conversationMonth").textContent = all.thisMonth;
-    conversationActivePeriods.textContent = namespace.i18n.t("conversation.active", {
-      days: all.activeDays, weeks: all.activeWeeks, months: all.activeMonths
-    });
     conversationStatsList.replaceChildren();
     if (!conversationStats?.rows?.length) {
       const empty = document.createElement("div");
@@ -484,11 +480,7 @@
     label.textContent = profile ? namespace.SiteProfiles.displayName(iconSite) : (row.site || row.aiKey.replace(/^custom:/, ""));
     name.appendChild(icon);
     name.appendChild(label);
-    const active = document.createElement("small");
-    active.className = "conversation-stat-active";
-    active.textContent = namespace.i18n.t("conversation.activeShort", { days: row.activeDays, weeks: row.activeWeeks, months: row.activeMonths });
     identity.appendChild(name);
-    identity.appendChild(active);
     item.appendChild(identity);
     [[row.total, "conversation.totalShort"], [row.today, "conversation.todayShort"], [row.thisWeek, "conversation.weekShort"], [row.thisMonth, "conversation.monthShort"]]
       .forEach(([value, key]) => item.appendChild(createConversationMetric(value, key)));
@@ -508,8 +500,8 @@
   async function clearConversationStats() {
     clearConversationStatsButton.disabled = true;
     try {
-      await store.clearConversationStats();
-      conversationStats = await store.getConversationStats();
+      await store.clearSendStats();
+      conversationStats = await store.getSendStats();
       renderConversationStats();
       showStatus(namespace.i18n.t("conversation.cleared"));
     } catch (error) {

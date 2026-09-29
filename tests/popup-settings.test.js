@@ -48,7 +48,7 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
     "#notifyEnabled", "#notifyProvider", "#notifyMinDurationSeconds", "#notifyAvailableTimes", "#addNotifyAvailableTime", "#testNotification", "#notifyBarkUrl", "#notifyServerChanKey", "#notifyPushPlusToken",
     "#notifyNtfyUrl", "#notifyNtfyTopic", "#notifyGotifyUrl", "#notifyGotifyToken", "#notifyDingtalkWebhook", "#notifyFeishuWebhook", "#notifyWecomWebhook", "#notifyCustomMethod", "#notifyCustomUrl", "#notifyCustomHeaders", "#notifyCustomBody",
     "#notificationDebugLog", "#refreshNotificationDebug", "#copyNotificationDebug", "#clearNotificationDebug",
-    "#clearConversationStats", "#conversationStatsList", "#conversationActivePeriods", "#conversationTotal", "#conversationToday", "#conversationWeek", "#conversationMonth",
+    "#clearConversationStats", "#conversationStatsList", "#conversationTotal", "#conversationToday", "#conversationWeek", "#conversationMonth",
     "#domainList", "#domainForm", "#clear", "#status", "#totalCount", "#sendCount", "#draftCount",
     "#shortcutCapture", "#shortcutDisable", "#languageSelect", "#clearDialog", "#clearDialogError", "#cancelClear", "#confirmClear", "#extensionVersion"
   ].map((selector) => [selector, element()]));
@@ -64,10 +64,10 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
       };
     }
     async getState() { return { entries: [], drafts: {} }; }
-    async getConversationStats() { return { all: { total: 0, today: 0, thisWeek: 0, thisMonth: 0, activeDays: 0, activeWeeks: 0, activeMonths: 0 }, rows: [] }; }
+    async getSendStats() { return { all: { total: 0, today: 0, thisWeek: 0, thisMonth: 0 }, rows: [] }; }
     async patchSettings(patch) { saves.push(patch); return { ...await this.getSettings(), ...patch, snapshotSeconds: Number(patch.snapshotSeconds || 60) }; }
     async clearHistory() { clearCount += 1; }
-    async clearConversationStats() { clearStatsCount += 1; }
+    async clearSendStats() { clearStatsCount += 1; }
   }
   const context = {
     chrome: {
@@ -85,8 +85,8 @@ test("修改自动快照秒数时无需关闭输入框即可立即保存", async
       normalizeDomain() { return ""; },
       sanitizeSettings(value) { return value; }
     }, conversationStatsModel: {
-      summarize() { return { all: { total: 0, today: 0, thisWeek: 0, thisMonth: 0, activeDays: 0, activeWeeks: 0, activeMonths: 0 }, rows: [] }; }
-    }, SiteProfiles: { PROFILES: [], icon: () => "", displayName: (site) => site }, STORAGE_KEYS: { settings: "settings", state: "state", conversationStats: "conversationStats" } },
+      summarize() { return { all: { total: 0, today: 0, thisWeek: 0, thisMonth: 0 }, rows: [] }; }
+    }, SiteProfiles: { PROFILES: [], icon: () => "", displayName: (site) => site }, STORAGE_KEYS: { settings: "settings", state: "state", sendStats: "sendStats" } },
     document: {
       documentElement: { lang: "" },
       querySelector: (selector) => elements[selector],

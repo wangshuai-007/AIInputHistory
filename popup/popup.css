@@ -32,14 +32,12 @@ p { color:var(--muted); font-size:11px; margin:0; }
 .conversation-metrics strong,.conversation-metrics span { display:block; }
 .conversation-metrics strong { color:var(--accent); font-size:16px; font-variant-numeric:tabular-nums; }
 .conversation-metrics span { margin-top:2px; color:var(--muted); font-size:9px; }
-.conversation-active { margin:9px 1px 0; color:color-mix(in srgb,var(--accent) 56%,var(--muted)); font-size:9px; line-height:1.45; }
 .conversation-stats-list { display:grid; gap:4px; margin-top:9px; padding-top:5px; border-top:1px solid color-mix(in srgb,var(--accent) 18%,var(--line)); }
 .conversation-stat-row { display:grid; grid-template-columns:minmax(0,1.3fr) repeat(4,34px); gap:5px; align-items:center; padding:7px 6px; border-radius:8px; transition:background .14s ease; }
 .conversation-stat-row:hover { background:color-mix(in srgb,var(--accent) 6%,transparent); }
 .conversation-stat-identity { min-width:0; }
 .conversation-stat-name { min-width:0; display:flex; align-items:center; gap:6px; font-size:10px; font-weight:650; }
 .conversation-stat-name .ai-logo { width:17px; height:17px; flex:0 0 auto; object-fit:contain; }
-.conversation-stat-active { display:block; margin:3px 0 0 23px; white-space:nowrap; font-size:8px; }
 .conversation-stat-name span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .conversation-stat-value { text-align:center; font-size:10px; font-variant-numeric:tabular-nums; }
 .conversation-stat-value small { display:block; margin-top:1px; font-size:8px; }

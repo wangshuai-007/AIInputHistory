@@ -234,7 +234,7 @@ try {
   await waitFor(`Boolean(document.querySelector('[data-testid="stop-button"]')) && document.querySelector("[data-ai-input-history='root']").shadowRoot.querySelector(".launcher").classList.contains("timing-active")`);
   const launcherMenu = await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history='root']").shadowRoot;const launcher=root.querySelector('.launcher');launcher.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:60,clientY:60}));const menu=root.querySelector('.launcher-menu');const buttons=[...menu.querySelectorAll('button')];return {visible:!menu.classList.contains('hidden'),labels:buttons.map((b)=>b.textContent.trim()),stopDisabled:buttons.find((b)=>b.dataset.launcherAction==='stop')?.disabled===true}})()`);
   assert.equal(launcherMenu.visible, true, "右键悬浮计时应打开菜单而不是直接隐藏");
-  assert.deepEqual(launcherMenu.labels, ["隐藏悬浮按钮", "停止计时"], "右键菜单应同时提供隐藏和停止计时");
+  assert.deepEqual(launcherMenu.labels, ["隐藏悬浮按钮", "禁用队列", "停止计时"], "右键菜单应提供隐藏、Queue 开关和停止计时");
   assert.equal(launcherMenu.stopDisabled, false, "正在计时时停止计时菜单必须可用");
   await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history='root']").shadowRoot;root.querySelector('[data-launcher-action="stop"]').click();return true})()`);
   await waitFor(`!document.querySelector("[data-ai-input-history='root']").shadowRoot.querySelector(".launcher").classList.contains("timing-active")`);
@@ -242,7 +242,23 @@ try {
   assert.equal(stoppedTiming.status, "cancelled", "停止计时应保存 cancelled 状态");
   assert.equal(stoppedTiming.launcherHidden, false, "停止计时不能同时隐藏悬浮按钮");
 
-  console.log(`浏览器计时/Queue 验收通过：文本请求 ${Math.round(finalState.timing.durationMs)}ms；Queue 可恢复异常发送，悬浮计时右键可停止`);
+  await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history=\'root\']").shadowRoot;const launcher=root.querySelector(".launcher");launcher.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:60,clientY:60}));root.querySelector("[data-launcher-action=\'queue\']").click();return true})()`);
+  await waitFor(`__testMemory.aiInputHistorySettings.queueEnabled===false`);
+  await evaluate(`(()=>{const c=document.querySelector(".composer");c.value="禁用队列直发";c.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector(".send").click();return true})()`);
+  await waitFor(`[...document.querySelectorAll(\'[data-message-author-role="user"]\')].some((item)=>item.textContent.trim()==="禁用队列直发")`);
+  const disabledQueueDirect = await evaluate(`(()=>{const queueItems=Object.values(__testMemory.aiInputHistoryPromptQueues||{}).flat();const queueRoot=document.querySelector("[data-ai-input-queue=\'root\']")?.shadowRoot;const section=queueRoot?.querySelector(".queue");const intent=queueRoot?.querySelector("[data-queue-intent]");return {queued:queueItems.some((item)=>item.text==="禁用队列直发"),composer:document.querySelector(".composer").value,queueVisible:Boolean(section)&&!section.classList.contains("hidden"),intentVisible:Boolean(intent)&&!intent.classList.contains("hidden")}})()`);
+  assert.equal(disabledQueueDirect.queued, false, "禁用 Queue 后回复进行中发送也不能加入队列");
+  assert.equal(disabledQueueDirect.composer, "", "禁用 Queue 后应直接交给 ChatGPT 消费输入");
+  assert.equal(disabledQueueDirect.queueVisible, false, "禁用 Queue 时已有 Queue 面板应隐藏");
+  assert.equal(disabledQueueDirect.intentVisible, false, "禁用 Queue 时不应显示下一条入队提示");
+  const disabledMenu = await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history=\'root\']").shadowRoot;const launcher=root.querySelector(".launcher");launcher.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:60,clientY:60}));return root.querySelector("[data-launcher-action=\'queue\']").textContent.trim()})()`);
+  assert.equal(disabledMenu, "启用队列", "禁用后右键菜单应切换为启用队列");
+  await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history=\'root\']").shadowRoot;root.querySelector("[data-launcher-action=\'queue\']").click();return true})()`);
+  await waitFor(`__testMemory.aiInputHistorySettings.queueEnabled===true`);
+  await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history=\'root\']").shadowRoot;const launcher=root.querySelector(".launcher");launcher.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:60,clientY:60}));root.querySelector("[data-launcher-action=\'stop\']")?.click();return true})()`);
+  await sleep(120);
+
+  console.log(`浏览器计时/Queue 验收通过：文本请求 ${Math.round(finalState.timing.durationMs)}ms；Queue 可右键禁用直发并恢复，悬浮计时右键可停止`);
 } finally {
   socket.close();
   const exited = new Promise((resolve) => browser.once("exit", resolve));

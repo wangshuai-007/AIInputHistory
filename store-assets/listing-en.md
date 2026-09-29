@@ -21,8 +21,8 @@ Key features:
 - Built-in support for ChatGPT, Claude, Gemini, Grok, DeepSeek, Copilot, Perplexity, Kimi, Doubao, Qwen, GLM, and other popular AI sites;
 - Add other AI domains manually;
 - English and Chinese interfaces, dark mode, custom shortcuts, and a movable floating button; right-click an active timer to stop a stuck observation;
-- Track total conversations, today, this week, this month, and cumulative active days/weeks/months separately for each AI, with an independent clear action;
-- Queue prompts while ChatGPT is replying, with edit, withdraw, and Send now actions; withdrawing restores the prompt to the composer, and Queue actions do not disable Up/Down history navigation; queued prompts send in order after the previous reply completes, and failed items do not permanently block later prompts;
+- Track total sends, today, this week, and this month separately for each AI; every actual send is counted, even within the same conversation, with an independent clear action;
+- Queue prompts while ChatGPT is replying, with edit, withdraw, and Send now actions; right-click the floating button to disable or re-enable Queue, sending directly while disabled without deleting existing queued prompts;
 - Track ChatGPT send-to-completion duration and optionally notify when a reply completes; version 1.31.3 adds compatibility with the latest assistant-turn/composer DOM so timers stop correctly after a reply finishes;
 - Filter automatic completion notifications by minimum duration (20 seconds by default) and multiple local-time availability ranges, including overnight ranges, with a local redacted debug log for troubleshooting;
 - Notifications support browser/system notifications, Bark, ServerChan, PushPlus, ntfy, Gotify, DingTalk, Feishu, WeCom robots, and custom HTTP requests;

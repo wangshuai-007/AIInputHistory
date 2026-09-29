@@ -15,9 +15,6 @@
   let storageSyncTimer = null;
   let snapshotInFlight = false;
   let recordQueue = Promise.resolve();
-  let conversationStatsTimer = null;
-  let conversationStatsFallbackSessionId = makeSessionId();
-  let lastConversationStat = null;
   let promptQueue = null;
 
   window.addEventListener("keydown", handleHistoryArrowKeydown, true);
@@ -52,7 +49,7 @@
     requestTiming.finish("cancelled");
     promptQueue?.onRequestFinished?.({ status: "cancelled", manual: true });
   });
-  requestTiming.setEnabled(queueSupported || settings.trackRequestTime || settings.completionNotification?.enabled === true);
+  requestTiming.setEnabled((queueSupported && settings.queueEnabled !== false) || settings.trackRequestTime || settings.completionNotification?.enabled === true);
   await requestTiming.restore(location.hostname);
   if (queueSupported && typeof namespace.PromptQueue === "function") {
     promptQueue = new namespace.PromptQueue({
@@ -60,9 +57,17 @@
       adapter,
       getInput: () => activeInput?.isConnected ? activeInput : adapter.findComposer(document, [panel.host, promptQueue?.shadow]),
       isRequestActive: () => Boolean(requestTiming.active),
-      getRequestStartedAt: () => requestTiming.active?.startedAt || 0
+      getRequestStartedAt: () => requestTiming.active?.startedAt || 0,
+      enabled: settings.queueEnabled !== false
     });
     await promptQueue.init();
+    panel.setQueueToggleHandler?.(async (enabled) => {
+      const next = await store.patchSettings({ queueEnabled: enabled });
+      liveSettings = next;
+      promptQueue.setEnabled(next.queueEnabled);
+      requestTiming.setEnabled((queueSupported && next.queueEnabled) || next.trackRequestTime || next.completionNotification?.enabled === true);
+      return next.queueEnabled;
+    }, settings.queueEnabled !== false);
   }
   namespace.captureSiteIcon(store, location.hostname).then(async (dataUrl) => {
     if (!dataUrl) return;
@@ -75,7 +80,9 @@
     const nextSettings = changes[namespace.STORAGE_KEYS.settings]?.newValue;
     if (nextSettings) {
       liveSettings = namespace.historyModel.sanitizeSettings(nextSettings);
-      requestTiming.setEnabled(queueSupported || liveSettings.trackRequestTime || liveSettings.completionNotification?.enabled === true);
+      requestTiming.setEnabled((queueSupported && liveSettings.queueEnabled) || liveSettings.trackRequestTime || liveSettings.completionNotification?.enabled === true);
+      promptQueue?.setEnabled?.(liveSettings.queueEnabled);
+      panel.setQueueEnabled?.(liveSettings.queueEnabled);
       panel.setLauncherEnabled(nextSettings.launcherEnabled !== false);
       if (liveSettings.launcherEnabled) discoverComposer();
       if (changes[namespace.STORAGE_KEYS.settings]?.oldValue?.language !== liveSettings.language) panel.setLanguage(liveSettings.language);
@@ -87,13 +94,6 @@
       storageSyncTimer = setTimeout(() => {
         panel.syncFromStorage().catch((error) => console.warn("[AI 输入历史] 同步多窗口历史失败", error));
       }, 50);
-    }
-    if (changes[namespace.STORAGE_KEYS.conversationStats]?.newValue) {
-      const stats = namespace.conversationStatsModel?.sanitizeStats(changes[namespace.STORAGE_KEYS.conversationStats].newValue);
-      if (stats && Object.keys(stats.byAi).length === 0) {
-        lastConversationStat = null;
-        conversationStatsFallbackSessionId = makeSessionId();
-      }
     }
   });
   const sendDetector = new namespace.SendDetector(
@@ -251,7 +251,7 @@
     if (!text.trim()) return;
     clearTimeout(draftTimer);
     lastSnapshotText = text;
-    scheduleConversationStat(context, Number.isFinite(metadata.sentAt) ? metadata.sentAt : Date.now());
+    recordSendStat(context, Number.isFinite(metadata.sentAt) ? metadata.sentAt : Date.now());
     if (activeContext === context) {
       historyNavigator.reset();
       activeContext = { ...context, sessionId: makeSessionId() };
@@ -273,38 +273,12 @@
     });
   }
 
-  function scheduleConversationStat(context, sentAt) {
+  function recordSendStat(context, sentAt) {
     const model = namespace.conversationStatsModel;
-    if (!model || typeof store.recordConversationStat !== "function" || window.top !== window) return;
-    let immediate = model.resolveConversation(location, conversationStatsFallbackSessionId);
-    if (!immediate.stable && lastConversationStat?.stable) {
-      conversationStatsFallbackSessionId = makeSessionId();
-      immediate = model.resolveConversation(location, conversationStatsFallbackSessionId);
-    }
-    clearTimeout(conversationStatsTimer);
-    if (immediate.stable) {
-      recordConversationStat(context, sentAt, immediate);
-      return;
-    }
-    conversationStatsTimer = setTimeout(() => recordConversationStat(context, sentAt), 1500);
-  }
-
-  async function recordConversationStat(context, sentAt, resolvedOverride = null) {
-    const model = namespace.conversationStatsModel;
-    if (!model || !context?.site) return;
+    if (!model || !context?.site || typeof store.recordSendStat !== "function") return;
     const aiKey = model.aiKeyForSite(context.site);
-    const resolved = resolvedOverride || model.resolveConversation(location, conversationStatsFallbackSessionId);
-    if (lastConversationStat?.aiKey === aiKey && lastConversationStat.key === resolved.key) return;
-    try {
-      if (lastConversationStat?.aiKey === aiKey && lastConversationStat.stable === false && resolved.stable === true) {
-        await store.markConversationStatSeen?.(aiKey, resolved.key, sentAt, lastConversationStat.key);
-      } else {
-        await store.recordConversationStat({ aiKey, site: context.site, conversationKey: resolved.key, at: sentAt });
-      }
-      lastConversationStat = { aiKey, key: resolved.key, stable: resolved.stable };
-    } catch (error) {
-      console.warn("[AI 输入历史] 保存 AI 对话统计失败", error);
-    }
+    store.recordSendStat({ aiKey, site: context.site, at: sentAt })
+      .catch((error) => console.warn("[AI 输入历史] 保存 AI 发送统计失败", error));
   }
 
   function queueRecord(operation) {
