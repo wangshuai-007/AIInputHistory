@@ -158,17 +158,19 @@ test('后台标签页定时器未调度时，DOM 变化仍能及时完成并停�
   assert.equal(h.activeTimers, 0, '完成后也应释放轮询计时器');
 });
 
-test('超快回复未采到生成中、发送按钮和底部操作按钮时，回复稳定后仍能判定完成', () => {
+test('未采到生成中和完成控件时，不能因发送按钮可用或短暂停顿提前结束', () => {
   const h = setup(); h.tracker.attach(h.start(), 'entry');
-  h.sample = { ...h.sample, busy: false, ready: false, replies: [{ key: 'new', nonempty: true, complete: false, activity: '5:2' }] };
+  h.sample = { ...h.sample, busy: false, ready: true, replies: [{ key: 'new', nonempty: true, complete: false, activity: '5:2' }] };
   h.now = 2000; h.tracker.tick();
   h.now = 2900; h.sample.replies[0].activity = '8:2'; h.tracker.tick();
-  h.now = 4000; h.tracker.tick();
-  assert.equal(h.writes.length, 0, '内容最后变化后不足 1250ms 不应提前完成');
-  h.now = 4150; h.tracker.tick();
+  h.now = 8000; h.tracker.tick();
+  assert.equal(h.writes.length, 0, '新版页面发送按钮可用且回复暂停数秒时不得提前完成');
+  h.now = 12_899; h.tracker.tick();
+  assert.equal(h.writes.length, 0, '纯文本稳定兜底不足 10 秒仍不应完成');
+  h.now = 12_900; h.tracker.tick();
   assert.equal(h.writes.length, 1);
   assert.equal(h.writes[0].status, 'completed');
-  assert.equal(h.writes[0].completedAt, 2900);
+  assert.equal(h.writes[0].completedAt, 12_900);
 });
 
 test('只有确认回复完成才触发完成回调并保留问题上下文', () => {

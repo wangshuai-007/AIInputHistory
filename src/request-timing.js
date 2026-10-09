@@ -142,17 +142,17 @@
       if (replyActivity && request.quietSince == null) request.quietSince = this.now();
       if (!request.sawReply || !request.quietSince) return;
       const explicitComplete = replies.some((reply) => reply.complete);
-      const generationStopped = request.sawBusy && state.ready === true;
-      if (trigger === "mutation" && (explicitComplete || generationStopped)) {
+      const generationStopped = request.sawBusy && state.busy === false;
+      if (explicitComplete || generationStopped) {
         request.completionTrigger = trigger;
-        this.finish("completed", request.quietSince);
+        this.finish("completed", this.now());
         return;
       }
-      const strongCompletionSignal = state.ready === true || request.sawBusy || explicitComplete;
       const stableFor = this.now() - request.quietSince;
-      if (stableFor >= (strongCompletionSignal ? 500 : 1250)) {
+      const requiredStableMs = 10_000;
+      if (stableFor >= requiredStableMs) {
         request.completionTrigger = trigger;
-        this.finish("completed", request.quietSince);
+        this.finish("completed", this.now());
       }
     }
 
@@ -238,7 +238,7 @@
       childList: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ["disabled", "aria-disabled", "data-is-streaming", "data-testid", "aria-label", "data-turn-key", "data-turn", "data-message-author-role", "data-conversation-role", "data-chatgpt-agent-turn-start"]
+      attributeFilter: ["disabled", "aria-disabled", "data-is-streaming", "data-testid", "aria-label", "data-turn-key", "data-turn", "data-message-author-role", "data-conversation-role", "data-chatgpt-agent-turn-start", "data-markdown-text-style", "data-markdown-text-tone", "data-chatgpt-search-unit-key", "data-chatgpt-search-message-ids"]
     });
     return observer;
   }
@@ -269,15 +269,18 @@
       '[data-turn="assistant"]',
       '[data-message-author-role="assistant"]',
       '[data-conversation-role="assistant"]',
-      '[data-chatgpt-agent-turn-start]'
+      '[data-chatgpt-agent-turn-start]',
+      '[data-chatgpt-search-unit-key$=":assistant"]',
+      '[data-markdown-text-style="assistant-message"]:not([data-markdown-text-tone="tertiary"])'
     ].join(","))];
     const seenTurns = new Set();
     const assistantTurns = [];
     for (const marker of assistantMarkers) {
-      const turn = marker.closest('[data-turn-key],[data-testid^="conversation-turn-"],article') || marker;
+      const turn = marker.closest('[data-turn-key],[data-testid^="conversation-turn-"],article,[data-chatgpt-search-unit-key]') || marker;
       if (seenTurns.has(turn)) continue;
       const roleNode = turn.querySelector?.('[data-conversation-role="assistant"],[data-message-author-role="assistant"]') || null;
-      const contentNode = roleNode || (marker.matches?.('[data-chatgpt-agent-turn-start]') ? turn : marker);
+      const rolloutContent = turn.querySelector?.('[data-markdown-text-style="assistant-message"]:not([data-markdown-text-tone="tertiary"]),.markdown') || null;
+      const contentNode = roleNode || rolloutContent || (marker.matches?.('[data-chatgpt-agent-turn-start]') ? turn : marker);
       if (!visible(contentNode)) continue;
       seenTurns.add(turn);
       assistantTurns.push({ marker, turn, contentNode });
@@ -286,9 +289,13 @@
     const replies = assistantTurns.slice(-3).map(({ marker, turn, contentNode }, localIndex) => {
       const groupKey = turn.getAttribute?.("data-turn-key");
       const ordinal = assistantTurns.length - Math.min(3, assistantTurns.length) + localIndex;
+      const rolloutMessageIds = turn.getAttribute?.("data-chatgpt-search-message-ids");
+      const rolloutUnitKey = turn.getAttribute?.("data-chatgpt-search-unit-key");
       const key = contentNode.getAttribute?.("data-message-id")
+        || rolloutMessageIds
         || turn.getAttribute?.("data-turn-id")
         || turn.getAttribute?.("data-testid")
+        || rolloutUnitKey
         || (groupKey ? `assistant-group:${groupKey}` : `assistant-index:${ordinal}`);
       const anchor = roleNodeForTurn(turn) || marker;
       const grouped = Boolean(groupKey);
