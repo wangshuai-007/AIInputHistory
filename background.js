@@ -4,7 +4,9 @@ if (typeof importScripts === "function") importScripts("src/completion-notificat
 
 const LOCK_TIMEOUT_MS = 15_000;
 const TIMING_SESSION_KEY = "aiInputHistoryActiveTimingByUrl";
+const TIMING_FINALIZED_KEY = "aiInputHistoryFinalizedTimingIds";
 const TIMING_MAX_AGE_MS = 30 * 60 * 1000;
+const TIMING_FINALIZED_MAX_AGE_MS = 60 * 60 * 1000;
 const NOTIFICATION_DEBUG_KEY = "aiInputHistoryNotificationDebugLog";
 const NOTIFICATION_DEBUG_LIMIT = 100;
 const waiters = [];
@@ -27,7 +29,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
-  if (["AIH_TIMING_SESSION_SAVE", "AIH_TIMING_SESSION_LOAD", "AIH_TIMING_SESSION_CLEAR"].includes(message?.type)) {
+  if (["AIH_TIMING_SESSION_SAVE", "AIH_TIMING_SESSION_LOAD", "AIH_TIMING_SESSION_CLEAR", "AIH_TIMING_SESSION_FINALIZE"].includes(message?.type)) {
     handleTimingSessionMessage(message, sender)
       .then((result) => sendResponse({ ok: true, ...result }))
       .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
@@ -144,7 +146,7 @@ function sanitizeNotificationDebugEntry(entry = {}) {
 
 function appendNotificationDebug(entry = {}) {
   const record = sanitizeNotificationDebugEntry(entry);
-  console.info("[AI Input History][通知调试]", record);
+  console.info("[AI Input History][诊断日志]", record);
   const operation = async () => {
     const current = await storageGet(NOTIFICATION_DEBUG_KEY);
     const logs = Array.isArray(current) ? current.slice(-NOTIFICATION_DEBUG_LIMIT + 1) : [];
@@ -167,39 +169,90 @@ function summarizeDeliveryResult(result = {}) {
   };
 }
 
-function timingUrlKey(site, path) {
+function timingConversationId(path) {
+  const match = String(path || "").match(/(?:^|\/)c\/([^/?#]+)/);
+  if (!match) return null;
+  try { return decodeURIComponent(match[1]); }
+  catch { return match[1]; }
+}
+
+function timingSessionKey(site, path, tabId = 0) {
   const host = String(site || "").trim().toLowerCase();
   const pathname = String(path || "").trim();
   if (!host || !pathname.startsWith("/")) throw new Error("请求计时会话缺少有效 URL");
-  return `${host}${pathname}`;
+  const conversationId = timingConversationId(pathname);
+  // New conversations have no server-side ID yet. Keep them isolated per Chrome tab.
+  return conversationId ? host + "::conversation:" + conversationId : host + "::pending-tab:" + tabId;
 }
 
-async function handleTimingSessionMessage(message) {
+async function handleTimingSessionMessage(message, sender = {}) {
   const operation = async () => {
     const now = Date.now();
+    const tabId = sender.tab?.id ?? 0;
     const stored = await storageGet(TIMING_SESSION_KEY) || {};
-    const states = Object.fromEntries(Object.entries(stored).filter(([, value]) =>
-      Number.isFinite(value?.startedAt) && now - value.startedAt <= TIMING_MAX_AGE_MS));
+    const oldFinalized = await storageGet(TIMING_FINALIZED_KEY) || {};
+    const finalized = Object.fromEntries(Object.entries(oldFinalized)
+      .filter(([, at]) => Number.isFinite(at) && now - at < TIMING_FINALIZED_MAX_AGE_MS)
+      .slice(-200));
+    const states = {};
+    // Upgrade existing URL-keyed records in place; different GPT layouts share the same conversation ID.
+    for (const state of Object.values(stored)) {
+      if (!state?.requestId || !Number.isFinite(state.startedAt)
+        || now - state.startedAt >= TIMING_MAX_AGE_MS || finalized[state.requestId]) continue;
+      const key = timingSessionKey(state.site, state.path, state.tabId ?? 0);
+      if (!states[key] || states[key].startedAt <= state.startedAt) states[key] = state;
+    }
+
+    let response = {};
+    const changed = message.type !== "AIH_TIMING_SESSION_LOAD"
+      || JSON.stringify(stored) !== JSON.stringify(states);
+    let finalizedChanged = false;
+
     if (message.type === "AIH_TIMING_SESSION_SAVE") {
       const state = message.state || {};
       if (!state.requestId) throw new Error("请求计时会话缺少 requestId");
-      for (const [key, value] of Object.entries(states)) {
-        if (value?.requestId === state.requestId) delete states[key];
-      }
-      states[timingUrlKey(state.site, state.path)] = { ...state, savedAt: now };
-    }
-    if (message.type === "AIH_TIMING_SESSION_CLEAR") {
-      if (message.requestId) {
-        for (const [key, value] of Object.entries(states)) {
-          if (value?.requestId === message.requestId) delete states[key];
+      if (finalized[state.requestId]) response = { saved: false, reason: "already-finalized" };
+      else {
+        const key = timingSessionKey(state.site, state.path, tabId);
+        const previous = states[key];
+        if (previous?.requestId !== state.requestId && previous?.startedAt > state.startedAt) {
+          response = { saved: false, reason: "newer-request-active" };
+        } else {
+          if (previous?.requestId && previous.requestId !== state.requestId) {
+            finalized[previous.requestId] = now;
+            finalizedChanged = true;
+          }
+          for (const [existingKey, value] of Object.entries(states)) {
+            if (value?.requestId === state.requestId) delete states[existingKey];
+          }
+          states[key] = { ...state, tabId: timingConversationId(state.path) ? null : tabId, savedAt: now };
+          response = { saved: true };
         }
-      } else if (message.site && message.path) delete states[timingUrlKey(message.site, message.path)];
+      }
     }
-    const state = message.type === "AIH_TIMING_SESSION_LOAD"
-      ? states[timingUrlKey(message.site, message.path)] || null
-      : null;
-    await storageSet({ [TIMING_SESSION_KEY]: states });
-    return message.type === "AIH_TIMING_SESSION_LOAD" ? { state } : {};
+
+    if (message.type === "AIH_TIMING_SESSION_CLEAR" || message.type === "AIH_TIMING_SESSION_FINALIZE") {
+      const requestId = String(message.requestId || "");
+      const matched = Object.entries(states).filter(([, state]) => state?.requestId === requestId);
+      for (const [key] of matched) delete states[key];
+      if (requestId && matched.length) {
+        finalized[requestId] = now;
+        finalizedChanged = true;
+      }
+      response = message.type === "AIH_TIMING_SESSION_FINALIZE"
+        ? { claimed: matched.length > 0 } : {};
+    }
+
+    if (message.type === "AIH_TIMING_SESSION_LOAD") {
+      const key = timingSessionKey(message.site, message.path, tabId);
+      response = { state: states[key] || null };
+    }
+
+    if (changed) await storageSet({ [TIMING_SESSION_KEY]: states });
+    if (finalizedChanged || JSON.stringify(oldFinalized) !== JSON.stringify(finalized)) {
+      await storageSet({ [TIMING_FINALIZED_KEY]: finalized });
+    }
+    return response;
   };
   const task = timingSessionQueue.then(operation, operation);
   timingSessionQueue = task.catch(() => {});

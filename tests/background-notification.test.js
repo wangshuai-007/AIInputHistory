@@ -62,6 +62,50 @@ test("请求计时按会话 URL 保存，换标签页重新打开仍可读取和
   assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/c/one" }, 1)).state, null);
 });
 
+test("多个 ChatGPT 会话 ID 独立保存，并支持相同 ID 的不同页面路径", async () => {
+  const h = setup({ enabled: false, provider: "browser" });
+  const at = Date.now();
+  const one = { requestId: "request-one", site: "chatgpt.com", path: "/c/alpha", startedAt: at, known: [] };
+  const two = { requestId: "request-two", site: "chatgpt.com", path: "/g/example/c/beta", startedAt: at + 1, known: [] };
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_SAVE", state: one }, 1)).saved, true);
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_SAVE", state: two }, 2)).saved, true);
+  assert.equal(Object.keys(h.data.aiInputHistoryActiveTimingByUrl).length, 2);
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/project/abc/c/beta" }, 88)).state.requestId, "request-two");
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/c/alpha" }, 1)).state.requestId, "request-one");
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_FINALIZE", requestId: "request-one", status: "completed" }, 1)).claimed, true);
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_FINALIZE", requestId: "request-one", status: "completed" }, 77)).claimed, false, "另一个标签页不应重复完成");
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/c/beta" }, 2)).state.requestId, "request-two");
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_SAVE", state: one }, 77)).saved, false, "迟到的存档不能让已完成请求复活");
+});
+
+test("新对话 ID 尚未生成时不同标签页相互隔离，生成后迁移为固定会话 ID", async () => {
+  const h = setup({ enabled: false, provider: "browser" });
+  const at = Date.now();
+  const a = { requestId: "pending-A", site: "chatgpt.com", path: "/", startedAt: at };
+  const b = { requestId: "pending-B", site: "chatgpt.com", path: "/", startedAt: at + 1 };
+  await h.send({ type: "AIH_TIMING_SESSION_SAVE", state: a }, 11);
+  await h.send({ type: "AIH_TIMING_SESSION_SAVE", state: b }, 12);
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/" }, 11)).state.requestId, "pending-A");
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/" }, 12)).state.requestId, "pending-B");
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/" }, 99)).state, null);
+  await h.send({ type: "AIH_TIMING_SESSION_SAVE", state: { ...a, path: "/c/new-id" } }, 11);
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/c/new-id" }, 99)).state.requestId, "pending-A");
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/" }, 11)).state, null);
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/" }, 12)).state.requestId, "pending-B");
+});
+
+test("老版本按 URL 保存的计时可按会话 ID 恢复，旧请求不能覆盖后发请求", async () => {
+  const h = setup({ enabled: false, provider: "browser" });
+  const at = Date.now();
+  const older = { requestId: "legacy", site: "chatgpt.com", path: "/g/gpt/c/reused", startedAt: at - 2000 };
+  h.data.aiInputHistoryActiveTimingByUrl = { "chatgpt.com/g/gpt/c/reused": older };
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/c/reused" }, 4)).state.requestId, "legacy");
+  const latest = { ...older, path: "/c/reused", requestId: "newer", startedAt: at };
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_SAVE", state: latest }, 4)).saved, true);
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_SAVE", state: older }, 4)).saved, false);
+  assert.equal((await h.send({ type: "AIH_TIMING_SESSION_LOAD", site: "chatgpt.com", path: "/c/reused" }, 4)).state.requestId, "newer");
+});
+
 test("第三方通知由后台发送且未开启时不会发送", async () => {
   const h = setup({ enabled: true, provider: "ntfy", ntfyUrl: "https://ntfy.sh", ntfyTopic: "my-topic" });
   const result = await h.send({ type: "AIH_REQUEST_COMPLETED", event: { promptText: "处理完成", completedAt: Date.now(), durationMs: 21_000 } });
@@ -159,6 +203,23 @@ test("企业微信渠道只发 HTTP，不会创建浏览器系统通知，并留
   assert.equal(logs.some((entry) => entry.stage === "browser-create"), false);
   const serialized = JSON.stringify(logs);
   assert.doesNotMatch(serialized, /VERY_SECRET_KEY|不应进入调试日志的问题正文/);
+});
+
+test("ChatGPT 计时暂缓的诊断日志可持久读取，且不会写入聊天正文", async () => {
+  const h = setup({ enabled: false, provider: "browser" });
+  const result = await h.send({
+    type: "AIH_NOTIFICATION_DEBUG_APPEND",
+    entry: { stage: "timing-finish-deferred", type: "completed", reason: "composer-stop-icon",
+      detectionTrigger: "mutation", durationMs: 4900, page: "chatgpt.com",
+      promptText: "private prompt", responseText: "private reply" }
+  });
+  assert.equal(result.ok, true);
+  const logs = (await h.send({ type: "AIH_NOTIFICATION_DEBUG_GET" })).logs;
+  assert.equal(logs.at(-1).stage, "timing-finish-deferred");
+  assert.equal(logs.at(-1).reason, "composer-stop-icon");
+  assert.equal(logs.at(-1).durationMs, 4900);
+  assert.equal(logs.at(-1).detectionTrigger, "mutation");
+  assert.doesNotMatch(JSON.stringify(logs), /private prompt|private reply/);
 });
 
 test("页面追加的通知调试日志只保留白名单字段", async () => {

@@ -102,6 +102,51 @@ try {
   assert.equal(groupedDomContract.before?.complete, false, "同组中位于 assistant 之前的用户 Copy 按钮不能误判为回复完成");
   assert.equal(groupedDomContract.after?.complete, true, "新版 copy-turn-action-button 应识别为回复完成");
   assert.equal(groupedDomContract.busyWithNewStop, true, "新版 composer 内 aria-label=Stop 按钮应识别为生成中");
+  const staleMarkersContract = await evaluate(`(()=>{
+    const thread = document.querySelector(".thread");
+    const older = document.createElement("article");
+    older.innerHTML = '<div data-message-author-role="assistant" data-is-streaming="true">旧回复</div><button data-testid="stop-button">停止</button>';
+    const latest = document.createElement("article");
+    latest.innerHTML = '<div data-message-author-role="assistant">已经完成的新回复</div><button aria-label="Copy response">复制</button>';
+    thread.append(older, latest);
+    const clean = AIInputHistory.requestTimingModel.sampleChatGPT();
+    latest.querySelector('[data-message-author-role="assistant"]').setAttribute('data-is-streaming','true');
+    const currentStreaming = AIInputHistory.requestTimingModel.sampleChatGPT();
+    older.remove(); latest.remove();
+    return { cleanBusy: clean.busy, cleanButton: clean.buttonState.processing,
+      currentStreamingBusy: currentStreaming.busy, currentStreamingOnly: currentStreaming.streamingOnly };
+  })()`);
+  assert.equal(staleMarkersContract.cleanBusy, false, "旧回复残留 Stop 和 streaming 不能阻塞最新完成回复");
+  assert.equal(staleMarkersContract.cleanButton, false, "旧回复的 Stop 按钮不能冒充当前请求处理按钮");
+  assert.equal(staleMarkersContract.currentStreamingBusy, true, "当前回复真实 streaming 应保持忙碌");
+  assert.equal(staleMarkersContract.currentStreamingOnly, true, "弱生成标记与明确 Stop 应分离识别");
+  const buttonStateContract = await evaluate(`(()=>{
+    const button = document.createElement("button");
+    button.id = "composer-submit-button";
+    button.setAttribute("aria-label", "Send prompt");
+    button.style.cssText = "position:fixed;top:120px;left:32px;width:36px;height:36px";
+    button.innerHTML = '<svg class="icon-primary-action" viewBox="0 0 20 20"><path d="M4.5 5.75C4.5 5.05964 5.05964 4.5 5.75 4.5H14.25C14.9404 4.5 15.5 5.05964 15.5 5.75V14.25C15.5 14.9404 14.9404 15.5 14.25 15.5H5.75C5.05964 15.5 4.5 14.9404 4.5 14.25V5.75Z"></path></svg>';
+    document.body.appendChild(button);
+    const stopIcon = AIInputHistory.requestTimingModel.readComposerButtonState();
+    const busyWithIcon = AIInputHistory.requestTimingModel.sampleChatGPT().busy;
+    button.querySelector("path").setAttribute("d", "M5 10L10 5L15 10");
+    const sendArrow = AIInputHistory.requestTimingModel.readComposerButtonState();
+    button.setAttribute("aria-label", "Stop generating");
+    const stopLabel = AIInputHistory.requestTimingModel.readComposerButtonState();
+    button.setAttribute("aria-label", "Send prompt");
+    button.querySelector("svg").innerHTML = '<rect x="5" y="5" width="10" height="10" /><path d="M5 10L10 5L15 10"/>';
+    const decorativeSquare = AIInputHistory.requestTimingModel.readComposerButtonState();
+    button.querySelector("svg").innerHTML = '<rect x="5" y="5" width="10" height="10" />';
+    const stopSquare = AIInputHistory.requestTimingModel.readComposerButtonState();
+    button.remove();
+    return { stopIcon, busyWithIcon, sendArrow, stopLabel, decorativeSquare, stopSquare };
+  })()`);
+  assert.equal(buttonStateContract.stopIcon.reason, "composer-stop-icon", "新版方形 Stop 图标应阻止结束计时");
+  assert.equal(buttonStateContract.busyWithIcon, true, "Stop 图标应让总体生成状态保持忙碌");
+  assert.equal(buttonStateContract.sendArrow.processing, false, "普通发送箭头不能误认为正在处理");
+  assert.equal(buttonStateContract.stopLabel.processing, true, "英文 Stop 标签应被识别");
+  assert.equal(buttonStateContract.decorativeSquare.processing, false, "附带装饰方块的发送箭头不能误判为 Stop");
+  assert.equal(buttonStateContract.stopSquare.reason, "composer-stop-square", "方形 rect Stop 图标应被识别");
   const modernTurnContract = await evaluate(`(()=>{const thread=document.querySelector(".thread");const turn=document.createElement("section");turn.setAttribute("data-turn","assistant");turn.setAttribute("data-turn-id","modern-assistant-turn");turn.textContent="当前 ChatGPT section data-turn 回复";thread.appendChild(turn);const sampled=AIInputHistory.requestTimingModel.sampleChatGPT();turn.remove();return sampled.replies.at(-1)})()`);
   assert.equal(modernTurnContract?.key, "modern-assistant-turn", "当前 section[data-turn=assistant] 结构应被识别为回复");
   assert.equal(modernTurnContract?.nonempty, true, "当前 section[data-turn=assistant] 回复正文应被识别");
@@ -267,6 +312,29 @@ try {
   await waitFor(`__testMemory.aiInputHistorySettings.queueEnabled===true`);
   await evaluate(`(()=>{const root=document.querySelector("[data-ai-input-history=\'root\']").shadowRoot;const launcher=root.querySelector(".launcher");launcher.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:60,clientY:60}));root.querySelector("[data-launcher-action=\'stop\']")?.click();return true})()`);
   await sleep(120);
+
+  // A real content script should park A when SPA navigation switches to B, not cancel it.
+  await evaluate(`(()=>{[...document.querySelectorAll("button")].find((item)=>item.textContent==="模拟回复完成")?.click();document.querySelectorAll(".thread article").forEach((item)=>item.remove());history.pushState({},"","/c/parallel-A");return true})()`);
+  await sleep(700);
+  await evaluate(`(()=>{const c=document.querySelector(".composer");c.value="并行会话 A";c.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector(".send").click();return true})()`);
+  await waitFor(`Boolean(JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}")["127.0.0.1::conversation:parallel-A"])`);
+  await evaluate(`(()=>{history.pushState({},"","/c/parallel-B");document.querySelectorAll(".thread article").forEach((item)=>item.remove());return true})()`);
+  await sleep(650);
+  const switchedA = await evaluate(`(()=>({parked:Boolean(JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}")["127.0.0.1::conversation:parallel-A"]),visible:document.querySelector("[data-ai-input-history='root']").shadowRoot.querySelector(".launcher").classList.contains("timing-active")}))()`);
+  assert.equal(switchedA.parked, true, "SPA 切走会话 A 时必须保存 A 的计时状态");
+  assert.equal(switchedA.visible, false, "浏览会话 B 时不能显示 A 的悬浮计时");
+  await evaluate(`(()=>{const c=document.querySelector(".composer");c.value="并行会话 B";c.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector(".send").click();return true})()`);
+  await waitFor(`Object.keys(JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}")).filter((key)=>key.includes("::conversation:parallel-")).length===2`);
+  await evaluate(`(()=>{history.pushState({},"","/c/parallel-A");document.querySelector(".thread").innerHTML='<article><div data-message-author-role="assistant" data-message-id="completed-A">A 已完成</div><button aria-label="Copy response">复制</button></article>';return true})()`);
+  await waitFor(`__testMemory.aiInputHistoryState.entries.find((item)=>item.text==="并行会话 A")?.requestTiming?.status==="completed"`);
+  const waitingB = await evaluate(`Boolean(JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}")["127.0.0.1::conversation:parallel-B"])`);
+  assert.equal(waitingB, true, "A 完成不会删除 B 的独立计时记录");
+  await evaluate(`(()=>{history.pushState({},"","/c/parallel-B");document.querySelector(".thread").innerHTML='<article><div data-message-author-role="assistant" data-message-id="completed-B">B 已完成</div><button aria-label="Copy response">复制</button></article>';return true})()`);
+  await waitFor(`__testMemory.aiInputHistoryState.entries.find((item)=>item.text==="并行会话 B")?.requestTiming?.status==="completed"`);
+  const independentTimings = await evaluate(`(()=>["并行会话 A","并行会话 B"].map((text)=>({text,timing:__testMemory.aiInputHistoryState.entries.find((item)=>item.text===text)?.requestTiming})))()`);
+  assert.equal(independentTimings.length, 2);
+  assert.ok(independentTimings.every((item)=>item.timing?.durationMs>0), "两个会话应各自记录完成耗时");
+  assert.deepEqual(independentTimings.map((item)=>item.timing.conversationId), ["parallel-A","parallel-B"], "最终历史记录应存入对应的 ChatGPT 会话 ID");
 
   console.log(`浏览器计时/Queue 验收通过：文本请求 ${Math.round(finalState.timing.durationMs)}ms；Queue 可右键禁用直发并恢复，悬浮计时右键可停止`);
 } finally {

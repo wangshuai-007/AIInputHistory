@@ -38,12 +38,13 @@
     const notificationMessages = globalThis.__testNotificationMessages = [];
     const storageListeners=[];
     let lockToken="";
+    function fixtureTimingKey(site,path){const match=String(path||"").match(/(?:^|\/)c\/([^/?#]+)/);return String(site||"")+(match?"::conversation:"+match[1]:"::pending-tab:1");}
     globalThis.chrome={runtime:{lastError:null,sendMessage(message,callback){
       if(message.type==="AIH_STORAGE_LOCK_ACQUIRE"){lockToken="fixture";callback({token:lockToken});return}
       if(message.type==="AIH_STORAGE_LOCK_RELEASE"){callback({released:message.token===lockToken});lockToken="";return}
-      if(message.type==="AIH_TIMING_SESSION_SAVE"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");for(const [key,value] of Object.entries(states))if(value?.requestId===message.state.requestId)delete states[key];states[`${message.state.site}${message.state.path}`]=message.state;localStorage.setItem("aih-fixture-timings",JSON.stringify(states));callback({ok:true});return}
-      if(message.type==="AIH_TIMING_SESSION_LOAD"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");callback({ok:true,state:states[`${message.site}${message.path}`]||null});return}
-      if(message.type==="AIH_TIMING_SESSION_CLEAR"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");for(const [key,value] of Object.entries(states))if((message.requestId&&value?.requestId===message.requestId)||(!message.requestId&&key===`${message.site}${message.path}`))delete states[key];localStorage.setItem("aih-fixture-timings",JSON.stringify(states));callback({ok:true});return}
+      if(message.type==="AIH_TIMING_SESSION_SAVE"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");for(const [key,value] of Object.entries(states))if(value?.requestId===message.state.requestId)delete states[key];states[fixtureTimingKey(message.state.site,message.state.path)]=message.state;localStorage.setItem("aih-fixture-timings",JSON.stringify(states));callback({ok:true,saved:true});return}
+      if(message.type==="AIH_TIMING_SESSION_LOAD"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");callback({ok:true,state:states[fixtureTimingKey(message.site,message.path)]||null});return}
+      if(message.type==="AIH_TIMING_SESSION_CLEAR"||message.type==="AIH_TIMING_SESSION_FINALIZE"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");let matched=false;for(const [key,value] of Object.entries(states))if(value?.requestId===message.requestId){delete states[key];matched=true}localStorage.setItem("aih-fixture-timings",JSON.stringify(states));callback({ok:true,claimed:matched});return}
       if(message.type==="AIH_REQUEST_COMPLETED"){notificationMessages.push(message);callback({ok:true,provider:"browser"});return}
       callback({ok:true});
     }},storage:{onChanged:{addListener(listener){storageListeners.push(listener)}},local:{get(key,callback){callback({[key]:memory[key]})},set(value,callback){const changes=Object.fromEntries(Object.entries(value).map(([key,newValue])=>[key,{oldValue:memory[key],newValue}]));Object.assign(memory,value);localStorage.setItem("aih-fixture-memory",JSON.stringify(memory));storageListeners.forEach((listener)=>listener(changes,"local"));callback()}}}};

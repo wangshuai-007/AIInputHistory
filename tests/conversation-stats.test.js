@@ -35,6 +35,8 @@ test("发送统计按 AI 归类", () => {
   assert.equal(model.aiKeyForSite("chatgpt.com"), "chatgpt");
   assert.equal(model.aiKeyForSite("chat.openai.com"), "chatgpt");
   assert.equal(model.aiKeyForSite("kimi.com"), "kimi");
+  assert.equal(model.aiKeyForSite("chat.qwen.ai"), "qwen");
+  assert.equal(model.aiKeyForSite("qwenwork.cn"), "qwenwork");
 });
 
 test("同一会话每次实际发送都累计，并按日周月统计", async () => {

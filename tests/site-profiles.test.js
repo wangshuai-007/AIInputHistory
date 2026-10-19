@@ -22,6 +22,9 @@ test("识别 Gemini、Grok、GLM 和 Qwen 官方站点", () => {
   assert.equal(profiles.forSite("chat.z.ai").id, "glm");
   assert.equal(profiles.forSite("chatglm.cn").id, "glm");
   assert.equal(profiles.forSite("chat.qwen.ai").id, "qwen");
+  assert.equal(profiles.forSite("qwenwork.cn").id, "qwenwork");
+  assert.equal(profiles.forSite("www.qwenwork.cn").id, "qwenwork");
+  assert.equal(profiles.forSite("docs.qwenwork.cn"), null);
   assert.equal(profiles.forSite("claude.ai").id, "claude");
   assert.equal(profiles.forSite("aistudio.google.com").id, "aistudio");
   assert.equal(profiles.forSite("chat.deepseek.com").id, "deepseek");
@@ -32,6 +35,8 @@ test("AI 站点图标使用对应的本地品牌资源", () => {
   assert.match(profiles.icon("grok.com"), /ai-logo grok/);
   assert.match(profiles.icon("chat.z.ai"), /ai-logo glm/);
   assert.match(profiles.icon("chat.qwen.ai"), /ai-logo qwen/);
+  assert.match(profiles.icon("qwenwork.cn"), /ai-logo qwenwork/);
+  assert.match(profiles.logoUrl("qwenwork"), /logos\/qwenwork\.svg$/);
   assert.match(profiles.icon("claude.ai"), /ai-logo claude/);
   assert.match(profiles.icon("aistudio.google.com"), /ai-logo aistudio/);
   assert.match(profiles.icon("chat.deepseek.com"), /ai-logo deepseek/);
@@ -42,8 +47,10 @@ test("中文品牌名会随界面语言切换", () => {
   context.globalThis.AIInputHistory.i18n.setLanguage("en");
   assert.equal(profiles.displayName("doubao.com"), "Doubao");
   assert.equal(profiles.displayName("yuanbao.tencent.com"), "Tencent Yuanbao");
+  assert.equal(profiles.displayName("qwenwork.cn"), "QwenWork");
   context.globalThis.AIInputHistory.i18n.setLanguage("zh-CN");
   assert.equal(profiles.displayName("doubao.com"), "豆包");
+  assert.equal(profiles.displayName("qwenwork.cn"), "千问办公");
 });
 
 test("每个已适配站点都包含本地官方图标资源", () => {
@@ -94,6 +101,28 @@ test("默认只允许内置 AI 网站，自定义域名可额外启用", () => {
   assert.equal(profiles.isAllowedSite("claude.ai", []), true);
   assert.equal(profiles.isAllowedSite("news.example.com", []), false);
   assert.equal(profiles.isAllowedSite("chat.example.com", ["example.com"]), true);
+});
+
+test("千问办公仅自动启用 /app 下的实际任务页面，文档和登录页不采集", () => {
+  assert.equal(profiles.isAllowedSite("qwenwork.cn", [], "/app"), true);
+  assert.equal(profiles.isAllowedSite("www.qwenwork.cn", [], "/app/session/123"), true);
+  assert.equal(profiles.isAllowedSite("qwenwork.cn", [], "/signin"), false);
+  assert.equal(profiles.isAllowedSite("qwenwork.cn", [], "/docs/web"), false);
+  assert.equal(profiles.isAllowedSite("docs.qwenwork.cn", [], "/app"), false);
+  assert.equal(profiles.isAllowedSite("qwenwork.cn", ["qwenwork.cn"], "/docs"), true);
+  assert.equal(profiles.isAllowedSite("qwenwork.cn.evil.example", [], "/app"), false);
+});
+
+test("千问办公的 textarea、富文本输入框和图标发送按钮使用独立适配", () => {
+  const element = (matchedSelector) => ({ matches: (selector) => selector === matchedSelector });
+  const textArea = "[data-chat-input-root] textarea:not([readonly])";
+  const richInput = "[data-chat-input-root] [role='textbox'][contenteditable='true']";
+  const iconSend = "[data-chat-input-root] button.bg-control-core-button-default";
+  assert.equal(profiles.matchesComposer(element(textArea), "qwenwork.cn"), true);
+  assert.equal(profiles.matchesComposer(element(richInput), "qwenwork.cn"), true);
+  assert.equal(profiles.matchesSendButton(element(iconSend), "qwenwork.cn"), true);
+  assert.equal(profiles.matchesSendButton(element(iconSend), "chat.qwen.ai"), false);
+  assert.equal(profiles.matchesComposer(element(textArea), "docs.qwenwork.cn"), false);
 });
 
 test("访问网站后优先使用页面缓存的官方图标", () => {

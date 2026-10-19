@@ -549,6 +549,9 @@
       if (!["completed", "cancelled", "failed", "timeout"].includes(timing?.status)) throw new Error("无效计时状态");
       if (!Number.isFinite(timing.startedAt)) throw new Error("无效发送时间");
       const value = { status: timing.status, startedAt: timing.startedAt };
+      if (typeof timing.conversationId === "string" && timing.conversationId.length <= 128) {
+        value.conversationId = timing.conversationId;
+      }
       if (timing.status === "completed") {
         if (!Number.isFinite(timing.completedAt) || timing.completedAt < timing.startedAt) throw new Error("无效回复时间");
         value.completedAt = timing.completedAt;

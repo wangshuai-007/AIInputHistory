@@ -14,7 +14,7 @@
       "notify.method": "请求方法", "notify.variables": "模板变量：{{title}}、{{message}}、{{question}}、{{duration}}、{{completedAt}}、{{pageUrl}}",
       "notify.robotHint": "直接粘贴群机器人完整 Webhook 地址。Webhook 等同发送凭据，请勿公开。",
       "notify.test": "发送测试通知", "notify.testSent": "测试通知已发送", "notify.testFailed": "测试通知发送失败",
-      "notify.debugTitle": "通知调试日志", "notify.debugHint": "仅记录通知流程和渠道，不记录问题正文、Webhook 或 Token；最多保留最近 100 条。", "notify.debugEmpty": "暂无通知日志",
+      "notify.debugTitle": "计时与通知诊断日志", "notify.debugHint": "记录计时结束被暂缓的原因和通知流程；不记录问题正文、Webhook 或 Token；最多保留最近 100 条。", "notify.debugEmpty": "暂无诊断日志",
       "notify.debugRefresh": "刷新", "notify.debugCopy": "复制", "notify.debugClear": "清空", "notify.debugCopied": "通知日志已复制", "notify.debugCleared": "通知日志已清空",
       "notify.permissionDenied": "未授予通知所需权限", "notify.permissionUnavailable": "当前浏览器不支持请求通知权限", "notify.invalidConfig": "请先完成通知配置",
       "app.title": "AI 输入历史", "app.localOnly": "仅保存在这台浏览器中", "language.label": "界面语言",
@@ -47,7 +47,7 @@
       "panel.footer": "↑ ↓ 选择 · Enter 插入", "panel.count": "{count} 条", "panel.empty": "暂无匹配记录\n输入内容按设置的秒数保存，确认实际发送后会特殊标记。",
       "panel.local": "本地", "panel.draft": "草稿", "panel.savedLive": "自动快照已保存", "panel.lastSaved": "上次自动保存：{time}", "panel.today": "今天 {time}",
       "filter.all": "全部网站", "filter.current": "当前 · {name}", "filter.crossSite": "跨站点历史",
-      "site.doubao": "豆包", "site.yuanbao": "腾讯元宝", "site.ernie": "文小言"
+      "site.doubao": "豆包", "site.yuanbao": "腾讯元宝", "site.ernie": "文小言", "site.qwenwork": "千问办公"
     },
     en: {
       "chatgpt.title": "ChatGPT-only settings", "chatgpt.hint": "These features apply only to ChatGPT conversations.",
@@ -61,7 +61,7 @@
       "notify.method": "Request method", "notify.variables": "Template variables: {{title}}, {{message}}, {{question}}, {{duration}}, {{completedAt}}, {{pageUrl}}",
       "notify.robotHint": "Paste the full group-robot Webhook URL. Treat it as a sending credential and do not publish it.",
       "notify.test": "Send test notification", "notify.testSent": "Test notification sent", "notify.testFailed": "Test notification failed",
-      "notify.debugTitle": "Notification debug log", "notify.debugHint": "Records notification flow and provider only; prompt text, Webhooks, and tokens are never logged. Keeps the latest 100 entries.", "notify.debugEmpty": "No notification logs yet",
+      "notify.debugTitle": "Timing & notification diagnostics", "notify.debugHint": "Records deferred timer completion and notification events, not prompts, Webhooks, or tokens. Keeps the latest 100 entries.", "notify.debugEmpty": "No diagnostic logs yet",
       "notify.debugRefresh": "Refresh", "notify.debugCopy": "Copy", "notify.debugClear": "Clear", "notify.debugCopied": "Notification log copied", "notify.debugCleared": "Notification log cleared",
       "notify.permissionDenied": "Required notification permission was not granted", "notify.permissionUnavailable": "This browser cannot request notification permission", "notify.invalidConfig": "Complete the notification configuration first",
       "app.title": "AI Input History", "app.localOnly": "Stored only in this browser", "language.label": "Interface language",
@@ -94,7 +94,7 @@
       "panel.footer": "↑ ↓ Select · Enter Insert", "panel.count": "{count} items", "panel.empty": "No matching entries\nInput is saved at the configured interval and marked when it is actually sent.",
       "panel.local": "Local", "panel.draft": "Draft", "panel.savedLive": "Automatic snapshot saved", "panel.lastSaved": "Last auto-save: {time}", "panel.today": "Today {time}",
       "filter.all": "All sites", "filter.current": "Current · {name}", "filter.crossSite": "History across sites",
-      "site.doubao": "Doubao", "site.yuanbao": "Tencent Yuanbao", "site.ernie": "ERNIE"
+      "site.doubao": "Doubao", "site.yuanbao": "Tencent Yuanbao", "site.ernie": "ERNIE", "site.qwenwork": "QwenWork"
     }
   };
   let language = "zh-CN";

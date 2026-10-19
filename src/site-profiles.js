@@ -10,6 +10,14 @@
     profile("glm", "GLM", ["chat.z.ai", "z.ai", "chatglm.cn"]),
     profile("qwen", "Qwen", ["chat.qwen.ai", "qwen.ai", "qianwen.com", "tongyi.aliyun.com"]),
     profile(
+      "qwenwork",
+      "千问办公",
+      ["qwenwork.cn"],
+      ["[data-chat-input-root] textarea:not([readonly])", "[data-chat-input-root] [role='textbox'][contenteditable='true']"],
+      ["[data-chat-input-root] button.bg-control-core-button-default", "[data-chat-input-root] button[type='submit']"],
+      { exactDomains: true, pathPrefixes: ["/app"] }
+    ),
+    profile(
       "chatgpt",
       "ChatGPT",
       ["chatgpt.com", "chat.openai.com"],
@@ -56,19 +64,21 @@
   ];
   let cachedSiteIcons = {};
 
-  function profile(id, name, domains, composerSelectors = [], sendSelectors = []) {
+  function profile(id, name, domains, composerSelectors = [], sendSelectors = [], options = {}) {
     return {
       id,
       name,
       domains,
       composerSelectors: [...STANDARD_COMPOSERS, ...composerSelectors],
-      sendSelectors: [...STANDARD_SEND, ...sendSelectors]
+      sendSelectors: [...STANDARD_SEND, ...sendSelectors],
+      ...options
     };
   }
 
   function forSite(site) {
-    const hostname = String(site || "").toLocaleLowerCase().replace(/^www\./, "");
-    return PROFILES.find((item) => item.domains.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`))) || null;
+    const hostname = normalizeSite(site);
+    return PROFILES.find((item) => item.domains.some((domain) =>
+      hostname === domain || (!item.exactDomains && hostname.endsWith(`.${domain}`)))) || null;
   }
 
   function displayName(site) {
@@ -77,9 +87,11 @@
     return item ? namespace.i18n.t(`site.${item.id}`, {}, item.name) : site;
   }
 
-  function isAllowedSite(site, customDomains = []) {
+  function isAllowedSite(site, customDomains = [], pathname = null) {
     const hostname = normalizeSite(site);
-    if (forSite(hostname)) return true;
+    const item = forSite(hostname);
+    if (item && (pathname === null || !item.pathPrefixes ||
+      item.pathPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)))) return true;
     return customDomains.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
   }
 
@@ -97,7 +109,7 @@
   }
 
   function logoUrl(id) {
-    const extension = id === "ernie" ? "svg" : "png";
+    const extension = ["ernie", "qwenwork"].includes(id) ? "svg" : "png";
     const path = `assets/logos/${id}.${extension}`;
     if (typeof globalThis.chrome?.runtime?.getURL === "function") return globalThis.chrome.runtime.getURL(path);
     return `../${path}`;

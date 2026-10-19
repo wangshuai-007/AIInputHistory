@@ -22,7 +22,7 @@
   const settings = await store.getSettings();
   namespace.i18n.setLanguage(settings.language);
   let liveSettings = settings;
-  if (!namespace.SiteProfiles.isAllowedSite(location.hostname, settings.customDomains)) return;
+  if (!namespace.SiteProfiles.isAllowedSite(location.hostname, settings.customDomains, location.pathname)) return;
   namespace.SiteProfiles.setSiteIcons(await store.getSiteIcons());
   const queueSupported = namespace.promptQueueModel?.supportedSite(location.hostname) === true;
 
@@ -33,15 +33,22 @@
   );
   const timingSession = {
     save: (state) => timingSessionMessage("AIH_TIMING_SESSION_SAVE", { state }),
-    load: async () => (await timingSessionMessage("AIH_TIMING_SESSION_LOAD", { site: location.hostname, path: location.pathname })).state,
+    load: async (site = location.hostname, path = location.pathname) =>
+      (await timingSessionMessage("AIH_TIMING_SESSION_LOAD", { site, path })).state,
     clear: (state) => timingSessionMessage("AIH_TIMING_SESSION_CLEAR", {
       requestId: state?.requestId || "", site: state?.site || location.hostname, path: state?.path || location.pathname
-    })
+    }),
+    finalize: (state, status) => timingSessionMessage("AIH_TIMING_SESSION_FINALIZE", { ...state, status })
   };
   const requestTiming = new namespace.RequestTiming({
     store,
     onTick: (elapsed) => panel.timingView.update(liveSettings.trackRequestTime ? elapsed : null),
     onComplete: notifyRequestCompleted,
+    onDiagnostic: (event) => appendNotificationDebug(
+      event.reason === "stale-streaming-ignored" ? "timing-stale-streaming-resolved" : "timing-finish-deferred", {
+        type: event.status, reason: event.reason, detectionTrigger: event.trigger,
+        durationMs: event.elapsedMs, page: location.hostname
+      }),
     session: timingSession
   });
   panel.setStopTimingHandler?.(() => {
@@ -51,6 +58,20 @@
   });
   requestTiming.setEnabled((queueSupported && settings.queueEnabled !== false) || settings.trackRequestTime || settings.completionNotification?.enabled === true);
   await requestTiming.restore(location.hostname);
+  let observedTimingPath = location.pathname;
+  const reconcileTimingRoute = () => {
+    const path = location.pathname;
+    if (path === observedTimingPath) return;
+    observedTimingPath = path;
+    if (requestTiming.active && requestTiming.acceptPath(requestTiming.active, path)) return;
+    requestTiming.suspend();
+    requestTiming.restore(location.hostname, path)
+      .catch((error) => console.warn("[AI 输入历史] 切换会话后恢复计时失败", error));
+  };
+  if (namespace.requestTimingModel.isSupported(location.hostname)) {
+    window.addEventListener("popstate", reconcileTimingRoute);
+    setInterval(reconcileTimingRoute, 400);
+  }
   if (queueSupported && typeof namespace.PromptQueue === "function") {
     promptQueue = new namespace.PromptQueue({
       store,
@@ -77,6 +98,23 @@
   panel.setLauncherEnabled(settings.launcherEnabled);
   chrome.storage.onChanged?.addListener((changes, areaName) => {
     if (areaName !== "local") return;
+    const timingChange = changes["aiInputHistoryActiveTimingByUrl"];
+    if (timingChange && namespace.requestTimingModel.isSupported(location.hostname)) {
+      const requestId = requestTiming.active?.requestId;
+      const before = Object.values(timingChange.oldValue || {});
+      const after = Object.values(timingChange.newValue || {});
+      if (requestId && before.some((state) => state?.requestId === requestId)
+        && !after.some((state) => state?.requestId === requestId)) {
+        // Another tab completed or superseded this conversation; do not send a second notification.
+        requestTiming.suspend({ persist: false });
+        promptQueue?.onRequestFinished?.({ status: "completed-elsewhere" });
+      }
+      if (!requestTiming.active && after.some((state) =>
+        namespace.requestTimingModel.sameConversationPath(state?.path, location.pathname))) {
+        requestTiming.restore(location.hostname, location.pathname)
+          .catch((error) => console.warn("[AI 输入历史] 同步其他标签页计时失败", error));
+      }
+    }
     const nextSettings = changes[namespace.STORAGE_KEYS.settings]?.newValue;
     if (nextSettings) {
       liveSettings = namespace.historyModel.sanitizeSettings(nextSettings);
