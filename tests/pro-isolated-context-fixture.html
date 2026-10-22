@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Content Script Isolated-World Pro Diagnostic Fixture</title>
+<style>
+body{font-family:Arial,sans-serif;margin:0;background:#fff}
+header{padding:18px}
+.composer{position:fixed;bottom:14px;left:5%;width:90%;height:72px;border:1px solid #ddd;border-radius:38px;display:flex;align-items:center;gap:12px;padding:4px 18px}
+#prompt-textarea{flex:1;outline:0}
+button{background:none;border:0;color:#666;font-size:19px;cursor:pointer}
+</style></head><body>
+<header><button>GPT-6 Pro account</button></header>
+<div class="composer" data-testid="composer">
+  <div id="prompt-textarea" contenteditable="plaintext-only" role="textbox"></div>
+  <button id="selected-pro" aria-haspopup="menu"><span>Pro</span>⌄</button>
+  <button aria-label="Dictate">Mic</button>
+</div>
+</body></html>

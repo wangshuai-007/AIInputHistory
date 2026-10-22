@@ -28,6 +28,35 @@
         <div><strong id="conversationMonth">0</strong><span data-i18n="conversation.month">本月</span></div>
       </div>
       <div id="conversationStatsList" class="conversation-stats-list"></div>
+      <div class="pro-usage" id="proUsageSection" hidden>
+        <div class="pro-usage-head">
+          <div><strong data-i18n="proUsage.title">Pro 模型使用次数</strong>
+            <small data-i18n="proUsage.hint">独立本地统计；不等于官方剩余额度。</small>
+          </div>
+          <button id="resetProUsage" type="button" data-i18n="proUsage.resetMonth">重置本月已用</button>
+        </div>
+        <div class="conversation-metrics pro-usage-metrics">
+          <div><strong id="proUsageTotal">0</strong><span data-i18n="conversation.total">总次数</span></div>
+          <div><strong id="proUsageToday">0</strong><span data-i18n="conversation.today">今日</span></div>
+          <div><strong id="proUsageWeek">0</strong><span data-i18n="conversation.week">本周</span></div>
+          <div><strong id="proUsageMonth">0</strong><span data-i18n="conversation.month">本月</span></div>
+        </div>
+        <div id="proPlanAllowance" class="pro-plan-allowance"></div>
+        <div id="proUsageModels" class="pro-usage-models"></div>
+        <small id="proUsageRecent" class="pro-usage-recent"></small>
+        <small id="proUsageResetAt" class="pro-usage-reset-at"></small>
+        <div id="proUsagePeriods" class="pro-usage-periods" role="group" data-i18n-aria-label="proUsage.periodTitle" aria-label="Pro 使用次数趋势周期">
+          <button type="button" data-pro-period="day" aria-pressed="true" data-i18n="proUsage.day">逐日</button>
+          <button type="button" data-pro-period="week" aria-pressed="false" data-i18n="proUsage.week">逐周</button>
+          <button type="button" data-pro-period="month" aria-pressed="false" data-i18n="proUsage.month">逐月</button>
+        </div>
+        <div id="proUsageTimeline" class="pro-usage-timeline"></div>
+        <section class="pro-quota" aria-labelledby="proQuotaTitle">
+          <strong id="proQuotaTitle" data-i18n="proQuota.title">ChatGPT 网页额度提示</strong>
+          <small data-i18n="proQuota.hint">只读取 ChatGPT 页面已显示的限制或重置时间；与本地统计及官方实时剩余配额不同。</small>
+          <div id="proQuotaStatus" class="pro-quota-status" aria-live="polite"></div>
+        </section>
+      </div>
     </section>
     <section class="settings">
       <h2 data-i18n="settings.title">记录设置</h2>
@@ -48,6 +77,27 @@
       <div class="chatgpt-settings-head"><h2 data-i18n="chatgpt.title">ChatGPT 专属设置</h2><p data-i18n="chatgpt.hint">以下功能仅用于 ChatGPT 对话。</p></div>
       <div class="chatgpt-settings-body">
         <div class="setting-row"><span><span data-i18n="timing.setting">跟踪请求耗时</span><small data-i18n="timing.hint">从发送到回复完成，默认关闭</small></span><label class="switch"><input id="trackRequestTime" type="checkbox" data-i18n-aria-label="timing.setting"><span aria-hidden="true"></span></label></div>
+        <div class="setting-row"><span><span data-i18n="proUsage.toggle">记录 Pro 模型次数</span><small data-i18n="proUsage.toggleHint">开启时自动读取当前账号套餐；独立记录新 Pro 请求，并在模型按钮内显示剩余次数。</small></span><label class="switch"><input id="trackProUsage" type="checkbox" data-i18n-aria-label="proUsage.toggle"><span aria-hidden="true"></span></label></div>
+        <div id="proUsageSettings" class="pro-usage-settings" hidden>
+        <label class="notify-row"><span><span data-i18n="proUsage.planLabel">ChatGPT 套餐档位</span><small data-i18n="proUsage.planHint">开启 Pro 计数时自动识别；无法确认具体档位时可手动选择。</small></span><select id="proPlan">
+          <option value="unknown" data-i18n="proUsage.planUnknown">未确认（不估算）</option>
+          <option value="pro-100">Pro $100</option>
+          <option value="pro-200">Pro $200</option>
+          <option value="pro-500">Pro $500（额度未确认）</option>
+          <option value="pro-unverified" data-i18n="proUsage.planProGeneric">Pro（档位未确认）</option>
+          <option value="business-unverified" data-i18n="proUsage.planBusinessGeneric">Business（档位未确认）</option>
+          <option value="plus">Plus</option>
+          <option value="go">Go</option>
+          <option value="free">Free</option>
+          <option value="business-standard">Business Standard</option>
+          <option value="business-premium">Business Premium</option>
+          <option value="enterprise" data-i18n="proUsage.planEnterprise">Enterprise / 自定义（配额未知）</option>
+        </select></label>
+        <div class="pro-plan-actions">
+          <button id="detectProPlan" type="button" data-i18n="proUsage.detectPlan">读取当前账号套餐</button>
+          <small id="proPlanDetection" aria-live="polite">开启时自动读取已登录的 ChatGPT 账号；也可点击重读或手动选择。</small>
+        </div>
+        </div>
         <div class="notifications">
           <h3 data-i18n="notify.title">回复完成通知</h3>
           <div class="setting-row"><span><span data-i18n="notify.enable">完成后发送通知</span><small data-i18n="notify.hint">回复完成后通知；默认内容为问题前 32 个字</small></span><label class="switch"><input id="notifyEnabled" type="checkbox"><span aria-hidden="true"></span></label></div>
@@ -70,10 +120,12 @@
           <details class="notify-debug">
             <summary data-i18n="notify.debugTitle">通知调试日志</summary>
             <small data-i18n="notify.debugHint">仅记录通知流程和渠道，不记录问题正文、Webhook 或 Token；最多保留最近 100 条。</small>
-            <pre id="notificationDebugLog" data-i18n="notify.debugEmpty">暂无通知日志</pre>
+            <input id="notificationDebugFilter" class="notify-debug-filter" type="search" data-i18n-placeholder="notify.debugFilter" placeholder="按会话 ID / 请求 ID 筛选">
+            <pre id="notificationDebugLog" data-i18n="notify.debugEmpty">暂无诊断日志</pre>
             <div class="notify-debug-actions">
               <button id="refreshNotificationDebug" type="button" data-i18n="notify.debugRefresh">刷新</button>
               <button id="copyNotificationDebug" type="button" data-i18n="notify.debugCopy">复制</button>
+              <button id="exportNotificationDebug" type="button" data-i18n="notify.debugExport">导出 JSON</button>
               <button id="clearNotificationDebug" type="button" data-i18n="notify.debugClear">清空</button>
             </div>
           </details>
@@ -98,6 +150,9 @@
   <script src="../src/i18n.js"></script>
   <script src="../src/site-profiles.js"></script>
   <script src="../src/conversation-stats.js"></script>
+  <script src="../src/pro-usage.js"></script>
+  <script src="../src/pro-quota.js"></script>
+  <script src="../src/pro-badge.js"></script>
   <script src="../src/completion-notification.js"></script>
   <script src="popup.js"></script>
 </body>

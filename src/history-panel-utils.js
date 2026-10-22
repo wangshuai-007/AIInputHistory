@@ -61,9 +61,12 @@
       const status = ["pending", "cancelled", "failed", "timeout"].includes(timing.status) ? timing.status : "pending";
       return `<span class="reply-timing">${escapeHtml(namespace.i18n.t(`timing.${status}`))}</span>`;
     }
-    const duration = namespace.i18n.t("timing.duration", { seconds: (timing.durationMs / 1000).toFixed(1) });
+    const seconds = (timing.durationMs / 1000).toFixed(1);
+    const approximate = timing.observedAfterResume === true;
+    const duration = namespace.i18n.t(timing.confirmedFromSidebar === true
+      ? "timing.sidebarBound" : approximate ? "timing.resumeBound" : "timing.duration", { seconds });
     const time = new Intl.DateTimeFormat(namespace.i18n.locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(new Date(timing.completedAt));
-    return `<span class="reply-timing" title="${escapeHtml(formatSavedTime(timing.completedAt))}"><span>${escapeHtml(duration)}</span><span>${escapeHtml(namespace.i18n.t("timing.replyAt", { time }))}</span></span>`;
+    return `<span class="reply-timing" title="${escapeHtml(formatSavedTime(timing.completedAt))}"><span>${escapeHtml(duration)}</span><span>${escapeHtml(namespace.i18n.t(approximate ? "timing.checkedAt" : "timing.replyAt", { time }))}</span></span>`;
   }
 
   /** Renders history only when needed, retaining scroll position and focused entry. */

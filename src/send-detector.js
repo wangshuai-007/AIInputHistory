@@ -54,6 +54,7 @@
         if (candidate.requestStarted) return candidate.requestHandle;
         candidate.requestStarted = true;
         candidate.requestHandle = this.onRequest(candidate.context, candidate.metadata);
+        candidate.metadata.requestHandle = candidate.requestHandle;
         return candidate.requestHandle;
       };
       candidate.onInput = (inputEvent) => {
@@ -106,7 +107,7 @@
     handleSubmit(event, input, context) {
       if (!input || !context || !event.target.contains(input)) return;
       const metadata = { sentAt: Date.now(), timing: this.capture(context), promptText: this.adapter.getText(input) };
-      this.onRequest(context, metadata);
+      metadata.requestHandle = this.onRequest(context, metadata);
       this.emitCurrent(input, context, "form", metadata);
     }
 
@@ -117,7 +118,7 @@
       const button = path.map((target) => getSendButton(target, input)).find(Boolean);
       if (!button) return;
       const metadata = { sentAt: Date.now(), timing: this.capture(context), promptText: this.adapter.getText(input) };
-      this.onRequest(context, metadata);
+      metadata.requestHandle = this.onRequest(context, metadata);
       this.emitCurrent(input, context, "button", metadata);
     }
 

@@ -24,6 +24,7 @@ function setup() {
       return { disconnect() { h.observerActive = false; } };
     }
   });
+  h.promptFingerprint = env.globalThis.AIInputHistory.requestTimingModel.promptFingerprint;
   h.start = () => { h.tracker.setEnabled(true); return h.tracker.start('chatgpt.com'); };
   h.complete = () => {
     h.sample = { ...h.sample, busy: false, replies: [{ key: 'new', nonempty: true, complete: true }] };
@@ -166,9 +167,11 @@ test('同一标签页 A→B→A 切换时各会话独立累计，返回 A 后恢
   h.now = 9000; h.tracker.tick();
   assert.equal(states.get('two').startedAt, 3000, 'B 的计时状态并未因切走被删除');
   await h.tracker.restore('chatgpt.com', '/g/mygpt/c/one');
+  h.now = 9600; h.tracker.tick();
   assert.equal(h.writes.at(-1)?.id, 'A');
   assert.equal(h.writes.at(-1)?.status, 'completed');
-  assert.equal(h.writes.at(-1)?.durationMs, 8000, '返回 A 后用 A 的原始发送时间计算耗时');
+  assert.equal(h.writes.at(-1)?.durationMs, 8600, '返回 A 后用 A 的原始发送时间计算耗时');
+  assert.equal(h.writes.at(-1)?.observedAfterResume, true, '返回后才确认完成应标记时间上限');
   assert.equal(h.writes.at(-1)?.conversationId, 'one', '历史耗时记录应包含实际会话 ID');
   assert.equal(states.has('one'), false);
   assert.equal(states.has('two'), true);
@@ -176,9 +179,235 @@ test('同一标签页 A→B→A 切换时各会话独立累计，返回 A 后恢
   h.sample = { ...h.sample, path: '/c/two', replies: [{ key: 'reply-B', nonempty: true, complete: true }] };
   h.now = 12000;
   await h.tracker.restore('chatgpt.com', '/c/two');
+  h.now = 12600; h.tracker.tick();
   assert.equal(h.writes.at(-1)?.id, 'B');
   assert.equal(h.writes.at(-1)?.status, 'completed');
-  assert.equal(h.writes.at(-1)?.durationMs, 9000);
+  assert.equal(h.writes.at(-1)?.durationMs, 9600);
+});
+
+test('切回 A 时 React 仍保留 B 的完成回复，不能误结束 A；新页面就绪后结束 A', async () => {
+  const h = setup();
+  h.tracker.setEnabled(true);
+  h.tracker.attach(h.tracker.start('chatgpt.com', null, { promptText: '会话 A 的问题' }), 'entry-A');
+  h.now = 2000; h.sample.path = '/c/two'; h.tracker.tick();
+  assert.equal(h.tracker.active, null);
+  const expected = h.promptFingerprint('会话 A 的问题');
+  const other = h.promptFingerprint('会话 B 的问题');
+  h.now = 10_000;
+  h.sample = { path: '/c/one', busy: false, errors: [], userActivities: [other],
+    replies: [{ key: 'b-completed', nonempty: true, complete: true, afterLatestUser: true }] };
+  await h.tracker.restore('chatgpt.com', '/c/one');
+  h.now = 12_000; h.tracker.tick();
+  assert.equal(h.writes.length, 0, '上一个会话的完成标记不能被认作 A 已完成');
+  assert.equal(h.tracker.active?.requestId != null, true, '应继续等待 A 的内容加载');
+  assert.equal(h.diagnostics.at(-1)?.reason, 'conversation-content-not-ready');
+  h.sample = { ...h.sample, userActivities: [expected],
+    replies: [{ key: 'old-assistant', nonempty: true, complete: true, afterLatestUser: false },
+      { key: 'a-completed', nonempty: true, complete: true, afterLatestUser: true }] };
+  h.now = 13_000; h.tracker.tick();
+  assert.equal(h.writes.length, 1, '恢复后看到真正属于 A 的完成回复应停止');
+  assert.equal(h.writes[0].status, 'completed');
+  assert.equal(h.writes[0].observedAfterResume, true);
+  assert.equal(h.tracker.active, null);
+});
+
+test('切回已完成的会话时没有复制按钮和曾经的 Stop 记录，3 秒稳定后结束计时', async () => {
+  const h = setup();
+  h.tracker.setEnabled(true);
+  h.tracker.attach(h.tracker.start('chatgpt.com', null, { promptText: '后台生成任务 A' }), 'entry-A');
+  h.now = 2000; h.sample.path = '/c/two'; h.tracker.tick();
+  h.now = 10_000;
+  h.sample = { path: '/c/one', busy: false, ready: false, errors: [],
+    userActivities: [h.promptFingerprint('后台生成任务 A')],
+    replies: [{ key: 'answer-A', nonempty: true, complete: false, activity: 'stable-A', afterLatestUser: true }] };
+  await h.tracker.restore('chatgpt.com', '/c/one');
+  assert.equal(h.tracker.active != null, true);
+  h.now = 10_600; h.tracker.tick();
+  h.now = 13_599; h.tracker.tick();
+  assert.equal(h.writes.length, 0, '切回后只稳定不到 3 秒仍要等待');
+  h.now = 13_600; h.tracker.tick();
+  assert.equal(h.writes[0]?.status, 'completed', '不能因完成控件缺失一直保持计时');
+  assert.equal(h.writes[0]?.observedAfterResume, true);
+  assert.equal(h.writes[0]?.completedAt, 13_600);
+});
+
+test('切回后未生成新回复或只看见旧回复时不能误判完成', async () => {
+  const h = setup();
+  h.tracker.setEnabled(true);
+  h.tracker.attach(h.tracker.start('chatgpt.com', null, { promptText: 'A 提问' }), 'entry-A');
+  h.now = 2000; h.sample.path = '/c/two'; h.tracker.tick();
+  h.now = 10_000;
+  h.sample = { path: '/c/one', busy: false, errors: [], userActivities: [h.promptFingerprint('A 提问')],
+    replies: [{ key: 'old', nonempty: true, complete: true, afterLatestUser: false }] };
+  await h.tracker.restore('chatgpt.com', '/c/one');
+  h.now = 30_000; h.tracker.tick();
+  assert.equal(h.writes.length, 0, '最后一次发送之后没有助手回复，不能用以前的复制按钮结束计时');
+  h.sample.replies.push({ key: 'new', nonempty: true, complete: true, afterLatestUser: true });
+  h.now = 31_000; h.tracker.tick();
+  assert.equal(h.writes.at(-1)?.status, 'completed');
+});
+
+test('切回会话存在真实 Stop 按钮时持续观察，直到生成结束才完成', async () => {
+  const h = setup();
+  h.tracker.setEnabled(true);
+  h.tracker.attach(h.tracker.start('chatgpt.com', null, { promptText: '交互式提问 A' }), 'entry-A');
+  h.now = 2000; h.sample.path = '/c/two'; h.tracker.tick();
+  h.now = 10_000;
+  h.sample = { path: '/c/one', busy: true, buttonState: { processing: true, reason: 'stop-button' },
+    errors: [], userActivities: [h.promptFingerprint('交互式提问 A')],
+    replies: [{ key: 'choice-A', nonempty: true, complete: true, activity: 'awaiting-choice', afterLatestUser: true }] };
+  await h.tracker.restore('chatgpt.com', '/c/one');
+  h.now = 15_000; h.tracker.tick();
+  assert.equal(h.writes.length, 0, '有 Stop 按钮不能使用回复稳定兜底提前结束');
+  h.sample = { ...h.sample, busy: false, buttonState: { processing: false, reason: 'no-stop-button' } };
+  h.now = 16_000; h.tracker.tick();
+  assert.equal(h.writes.at(-1)?.status, 'completed');
+  assert.equal(h.writes.at(-1)?.observedAfterResume, false, '回到页面后仍在生成，完成时间为实时观测');
+});
+
+test('交互选项会暂停计时，选择后从冻结的秒数继续，结束不计算暂停时长', () => {
+  const h = setup();
+  h.tracker.attach(h.start(), 'selection-entry');
+  h.now = 3000;
+  h.sample = { ...h.sample, busy: true, buttonState: { processing: true, reason: 'stop-button' },
+    waitingForSelection: true, selectionTurnKey: 'choice-turn', replies: [{ key: 'choice', nonempty: true, complete: true }] };
+  h.tracker.tick();
+  assert.equal(h.tracker.active.pausedAt, 3000);
+  assert.equal(h.ticks.at(-1), 2000);
+  h.now = 13_000; h.tracker.tick();
+  assert.equal(h.ticks.at(-1), 2000, '等待用户选择期间秒数不增长');
+  h.tracker.selectionMade();
+  assert.equal(h.tracker.active.pausedAt, null);
+  assert.equal(h.tracker.active.pausedDurationMs, 10_000);
+  h.now = 14_000; h.tracker.tick();
+  assert.equal(h.tracker.active.pausedAt, null, '已选中的旧选项还在页面中不能重新暂停');
+  h.now = 17_000;
+  h.sample = { ...h.sample, busy: false, buttonState: { processing: false, reason: 'no-stop-button' },
+    waitingForSelection: false, replies: [{ key: 'final', nonempty: true, complete: true }] };
+  h.tracker.tick();
+  assert.equal(h.writes.at(-1).status, 'completed');
+  assert.equal(h.writes.at(-1).durationMs, 6000, '实际计时是累计运行的 2+4 秒');
+});
+
+test('同一页面先暂停但最终回复已完成，必须结束计时并清除运行状态', () => {
+  const h = setup();
+  const events = [];
+  h.tracker.onComplete = (value) => events.push(value);
+  const req = h.start();
+  h.tracker.attach(req, 'reply-entry');
+  h.now = 4000;
+  h.sample = { ...h.sample, busy: true, buttonState: { processing: true, reason: 'stop-button' },
+    waitingForSelection: true, selectionKind: 'explicit', selectionTurnKey: 'choice-turn',
+    replies: [{ key: 'question', nonempty: true, complete: false, activity: 'choice-start' }] };
+  h.tracker.tick();
+  assert.equal(h.tracker.active.pausedAt, 4000);
+  h.now = 7000;
+  h.sample = { ...h.sample, busy: false, buttonState: { processing: false, reason: 'no-stop-button' },
+    waitingForSelection: false, selectionKind: null,
+    replies: [{ key: 'new-answer', nonempty: true, complete: true, activity: 'done' }] };
+  h.tracker.tick('mutation');
+  assert.equal(h.tracker.active, null, '完成后不得残留 paused 状态');
+  assert.equal(h.writes.at(-1).status, 'completed');
+  assert.equal(h.writes.at(-1).durationMs, 3000, '真正等待用户的 3 秒暂停需从总耗时中扣除');
+  assert.equal(h.ticks.at(-1), null, '悬浮计时器应恢复普通图标');
+  assert.equal(events.length, 1);
+});
+
+test('普通操作按钮导致的错误选择暂停在最终回复出现后撤销，并计入真实耗时', () => {
+  const h = setup();
+  const debug = [];
+  h.session.debug = (event) => debug.push(event);
+  h.tracker.attach(h.start(), 'false-selection');
+  h.now = 4000;
+  h.sample = { ...h.sample, busy: true, waitingForSelection: true, selectionKind: 'inferred',
+    buttonState: { processing: true, reason: 'stop-button' }, selectionTurnKey: 'fake-choice',
+    replies: [{ key: 'new', nonempty: true, complete: false, activity: 'generating' }] };
+  h.tracker.tick();
+  assert.equal(h.tracker.active?.pausedAt, 4000);
+  h.now = 7200;
+  h.sample = { ...h.sample, busy: false, buttonState: { processing: false, reason: 'no-stop-button' },
+    waitingForSelection: true, selectionKind: 'inferred',
+    replies: [{ key: 'new', nonempty: true, complete: true, activity: 'completed' }] };
+  h.tracker.tick('mutation');
+  assert.equal(h.tracker.active, null, '确认当前请求已经完成后不能一直卡在暂停');
+  assert.equal(h.writes[0].status, 'completed');
+  assert.equal(h.writes[0].durationMs, 6200, '误暂停期间仍应计入生成耗时');
+  assert.ok(debug.some((entry) => entry.stage === 'timing-false-selection-recovered'));
+});
+
+test('真正的待选项即使有 Copy 按钮也必须等选择，不能提前标记完成', () => {
+  const h = setup();
+  h.tracker.attach(h.start(), 'true-choice');
+  h.now = 3100;
+  h.sample = { ...h.sample, busy: false, buttonState: { processing: false },
+    waitingForSelection: true, selectionKind: 'explicit', selectionTurnKey: 'choose-yes-no',
+    replies: [{ key: 'await', nonempty: true, complete: true, activity: 'awaiting-user' }] };
+  h.tracker.tick();
+  assert.ok(Number.isFinite(h.tracker.active.pausedAt), '真正选择题要暂停');
+  h.now = 45000; h.tracker.tick();
+  assert.equal(h.writes.length, 0, '明确选择没有执行时，不可仅凭 Copy 控件误结束');
+  assert.ok(Number.isFinite(h.tracker.active.pausedAt));
+  h.tracker.selectionMade();
+  h.sample = { ...h.sample, busy: true, buttonState: { processing: true },
+    waitingForSelection: false };
+  h.now = 46000; h.tracker.tick();
+  h.sample = { ...h.sample, busy: false, buttonState: { processing: false },
+    replies: [{ key: 'final', nonempty: true, complete: true, activity: 'finally' }] };
+  h.now = 48000; h.tracker.tick();
+  assert.equal(h.writes.at(-1)?.status, 'completed');
+  assert.equal(h.writes.at(-1)?.durationMs, 5100, '只计算选择前 2.1 秒与选择后 3 秒');
+});
+
+test('老版本已误暂停的会话无需切换页面，遇到完成控件自动结算', () => {
+  const h = setup();
+  h.tracker.attach(h.start(), 'old-stuck');
+  h.now = 3000; h.tracker.setPaused(true, 'selection');
+  // Old persisted state contains a pausedAt but no selectionKind metadata.
+  assert.equal(h.tracker.active.selectionKind, null);
+  h.now = 9000;
+  h.sample = { ...h.sample, busy: false, waitingForSelection: false,
+    replies: [{ key: 'finished', nonempty: true, complete: true, activity: 'final' }] };
+  h.tracker.tick('mutation');
+  assert.equal(h.tracker.active, null);
+  assert.equal(h.writes[0]?.status, 'completed');
+  assert.equal(h.writes[0]?.durationMs, 2000, '旧版暂停时长不应继续增长');
+});
+
+test('跨标签页恢复暂停状态时冻结数字，同步恢复的暂停时长不能被后续旧存档覆盖', async () => {
+  const h = setup();
+  const state = h.start();
+  h.tracker.attach(state, 'entry');
+  const version = state.pauseVersion + 1000;
+  h.now = 4000;
+  h.tracker.syncPause({ requestId: state.requestId, pauseVersion: version, pausedAt: 2500, pausedDurationMs: 500 });
+  assert.equal(h.tracker.active.pausedAt, 2500);
+  h.now = 9000;
+  h.tracker.tick();
+  assert.equal(h.ticks.at(-1), 1000, '跨标签页暂停期间显示应冻结');
+  h.tracker.syncPause({ requestId: state.requestId, pauseVersion: version + 1, pausedAt: null, pausedDurationMs: 7000 });
+  assert.equal(h.tracker.active.pausedAt, null);
+  assert.equal(h.ticks.at(-1), 1000, '同步恢复后的秒数仍须扣除暂停时间');
+  h.tracker.finish('cancelled');
+});
+
+test('切换会话和恢复观察写入诊断元数据，不记录问题正文', async () => {
+  const h = setup();
+  const events = [];
+  h.session.debug = (event) => events.push(event);
+  h.tracker.setEnabled(true);
+  h.tracker.attach(h.tracker.start('chatgpt.com', null, { promptText: '这是敏感问题' }), 'debug-entry');
+  h.sample.path = '/c/other';
+  h.now = 2000; h.tracker.tick();
+  assert.equal(h.tracker.active, null);
+  assert.equal(events.filter((event) => event.stage === 'timing-observer-suspended').length, 1);
+  h.sample.path = '/c/one';
+  h.now = 3500;
+  await h.tracker.restore('chatgpt.com', '/c/one');
+  assert.equal(events.filter((event) => event.stage === 'timing-observer-restored').length, 1);
+  assert.equal(events.every((event) => event.conversationId === 'one'), true);
+  assert.equal(events.every((event) => event.requestId != null), true);
+  assert.doesNotMatch(JSON.stringify(events), /这是敏感问题/);
+  h.tracker.finish('cancelled');
 });
 
 test('同一个请求在两个标签页完成时，后台确认只允许写入和通知一次', async () => {
@@ -464,7 +693,7 @@ test('恢复时页面已存在新回复只补记完成，不补发通知', async
   });
   restored.setEnabled(true);
   await restored.restore('chatgpt.com');
-  h.now = 10_500;
+  h.now = 10_700;
   restored.tick();
   assert.equal(h.writes.at(-1).status, 'completed');
   assert.equal(completed.length, 1);
@@ -481,4 +710,133 @@ test('默认计时器不以 RequestTiming 对象作为浏览器原生方法的 t
   const tracker = new env.globalThis.AIInputHistory.RequestTiming({ store: {}, onTick() {}, sample: () => ({ path: '/c/a', replies: [], busy: false }) });
   tracker.setEnabled(true); tracker.start('chatgpt.com'); tracker.finish('cancelled');
   assert.equal(created, true); assert.equal(cleared, true);
+});
+
+test('回复中临时 local-chatgpt 会话升级为正式 UUID 时持续计时，不触发挂起', () => {
+  const h = setup();
+  h.sample.path = '/';
+  h.tracker.attach(h.start(), 'route-entry');
+  const original = h.tracker.active.requestId;
+  const provisional = '/c/local-chatgpt:aaaabbbb-1111-2222-3333-444455556666';
+  const canonical = '/c/6acf1bda-6bc4-83ee-9b4e-6144bb94d490';
+  h.sample = { ...h.sample, busy: true, path: provisional,
+    buttonState: { processing: true, reason: 'stop-button' },
+    replies: [{ key: 'stream', nonempty: true, complete: false, activity: 'still-streaming' }] };
+  h.now = 1500; h.tracker.tick();
+  assert.equal(h.tracker.active.requestId, original);
+  assert.equal(h.sessionState.path, provisional);
+  h.now = 4600;
+  h.sample.path = canonical;
+  h.tracker.tick();
+  assert.equal(h.tracker.active?.requestId, original, '临时会话跳转正式 ID 不等于切换聊天');
+  assert.equal(h.activeTimers, 1, '必须继续更新悬浮计时器');
+  assert.equal(h.observerActive, true);
+  assert.equal(h.sessionState.path, canonical, '同一请求持久化为真实会话路径');
+  assert.equal(h.writes.length, 0, 'GPT 正在输出时不得记为完成或取消');
+  assert.notEqual(h.ticks.at(-1), null);
+  h.sample.path = '/c/another-chat';
+  h.now = 5600; h.tracker.tick();
+  assert.equal(h.tracker.active, null, '真正切换到其他会话仍应挂起');
+  assert.equal(h.sessionState.path, canonical, '不应将其他会话误绑定');
+});
+
+test('发送按钮重复触发时如 GPT 已在生成，不能先取消原计时', () => {
+  const h = setup();
+  h.tracker.attach(h.start(), 'active-entry');
+  const before = h.tracker.active.requestId;
+  h.sample = { ...h.sample, busy: true,
+    buttonState: { processing: true, reason: 'stop-button' },
+    replies: [{ key: 'stream', nonempty: true, complete: false, activity: 'text-partial' }] };
+  h.now = 6100; h.tracker.tick();
+  const attempted = h.tracker.start('chatgpt.com');
+  assert.equal(attempted, null);
+  assert.equal(h.tracker.active?.requestId, before, '重叠 submit/click 必须保留现有请求');
+  assert.equal(h.activeTimers, 1);
+  assert.equal(h.writes.length, 0, '不能产生 cancelled 历史记录');
+});
+
+test('读取 DOM 样本暂时失败时不能挂起或销毁正在回复的计时', () => {
+  const h = setup();
+  h.tracker.attach(h.start(), 'active-entry');
+  const original = h.tracker.active.requestId;
+  const originalSample = h.tracker.sample;
+  h.tracker.sample = () => { throw new Error('transient React DOM remount'); };
+  h.now = 3300;
+  const attempted = h.tracker.start('chatgpt.com');
+  assert.equal(attempted, null);
+  assert.equal(h.tracker.active?.requestId, original, '捕获失败时不得清除上一请求');
+  h.tracker.safeTick('mutation');
+  assert.equal(h.tracker.active?.requestId, original, 'MutationObserver 采样异常仍需保留计时');
+  assert.equal(h.activeTimers, 1);
+  assert.equal(h.writes.length, 0);
+  h.tracker.sample = originalSample;
+  h.sample.busy = true;
+  h.now = 5000; h.tracker.tick();
+  assert.equal(h.tracker.active?.requestId, original);
+});
+
+test('只有真实生成确认后才触发 Pro 补计；采样暂时识别不到模型会继续重试', () => {
+  const h = setup();
+  const calls = [];
+  h.tracker.onGenerationConfirmed = (request) => {
+    calls.push({ requestId: request.requestId, at: h.now });
+    return calls.length > 1;
+  };
+  h.tracker.attach(h.start(), 'entry');
+  assert.equal(calls.length, 0, '点发送但尚未开始生成，不应记 Pro 次数');
+  h.now = 1700; h.tracker.tick();
+  assert.equal(calls.length, 0);
+  h.sample = { ...h.sample, busy: true,
+    buttonState: { processing: true, reason: 'stop-button' } };
+  h.now = 2000; h.tracker.tick();
+  assert.equal(calls.length, 1);
+  assert.equal(h.tracker.active.generationSignalSent, undefined);
+  h.now = 2200; h.tracker.tick();
+  assert.equal(calls.length, 1, '识别失败时不能每 250ms 重试造成忙循环');
+  h.now = 3001; h.tracker.tick();
+  assert.equal(calls.length, 2);
+  assert.equal(h.tracker.active.generationSignalSent, true);
+  h.now = 5000; h.tracker.tick();
+  assert.equal(calls.length, 2, '同一次生成只发出一个已确认补计信号');
+  assert.equal(new Set(calls.map((call) => call.requestId)).size, 1);
+});
+
+test('恢复的旧计时器不能因为仍显示正在生成就再次触发 Pro 补计', () => {
+  const h = setup();
+  let fired = 0;
+  h.tracker.onGenerationConfirmed = () => { fired++; return true; };
+  h.tracker.attach(h.start(), 'entry');
+  h.tracker.active.restored = true;
+  h.tracker.active.restoredAt = 0;
+  h.sample = { ...h.sample, busy: true };
+  h.now = 5000; h.tracker.tick();
+  assert.equal(fired, 0);
+});
+
+test('review: recently observed long generation restores with its original start time', async () => {
+  const h = setup();
+  h.now = 40 * 60_000;
+  h.sessionState = {
+    requestId: 'long-live-restore', site: 'chatgpt.com', path: '/c/one',
+    startedAt: 1000, lastBusyAt: h.now - 1000, sawBusy: true
+  };
+  h.sample = { ...h.sample, busy: true, buttonState: { processing: true, reason: 'stop-button' } };
+  h.tracker.setEnabled(true);
+  const restored = await h.tracker.restore('chatgpt.com', '/c/one');
+  assert.equal(restored?.requestId, 'long-live-restore');
+  assert.equal(restored.startedAt, 1000);
+  assert.equal(h.tracker.active?.requestId, 'long-live-restore');
+  h.tracker.finish('cancelled');
+});
+
+test('review: stale saves without recent generation do not extend restore retention', async () => {
+  const h = setup();
+  h.now = 61 * 60_000;
+  h.sessionState = {
+    requestId: 'stale-restore', site: 'chatgpt.com', path: '/c/one',
+    startedAt: 1000, lastBusyAt: 30 * 60_000, savedAt: h.now
+  };
+  h.tracker.setEnabled(true);
+  assert.equal(await h.tracker.restore('chatgpt.com', '/c/one'), null);
+  assert.equal(h.sessionState, null);
 });

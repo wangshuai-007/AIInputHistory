@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pro composer counter placement fixture</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#fafafa;color:#202124;font:16px "Segoe UI",sans-serif}header{padding:20px}button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}main{padding:35px;color:#777}.composer{position:fixed;left:16px;right:16px;bottom:56px;height:80px;display:flex;align-items:center;gap:20px;border:1px solid #e6e6e6;border-radius:44px;background:#fff;padding:8px 10px 8px 24px;box-shadow:0 3px 16px #00000008}.add{font-size:30px;padding:0}.editor{flex:1;min-width:0;color:#999;font-size:22px;outline:0}.editor:empty:before{content:'询问 ChatGPT';pointer-events:none}.actions{display:flex;align-items:center;gap:18px;flex:none}.pro-clip{width:auto;overflow:hidden;flex:none}#composer-pro{display:flex;align-items:center;gap:10px;width:max-content;min-width:94px;height:48px;padding:0 10px;white-space:nowrap;font-size:22px;color:#999}#composer-pro svg{width:14px;height:14px;flex:none}#microphone{width:34px;height:42px;padding:5px}#microphone svg{width:24px;height:28px}#voice{width:52px;height:52px;border-radius:50%;background:#387ffc;color:white;font-size:25px}.notice{position:fixed;bottom:146px;width:100%;text-align:center;color:#999;font-size:14px}@media(max-width:500px){.composer{left:8px;right:8px;gap:10px;padding-left:16px}.actions{gap:8px}.editor{font-size:15px}#voice{width:38px;height:38px}#composer-pro{font-size:18px}.pro-clip{width:auto}#composer-pro{width:max-content;min-width:82px}.notice{font-size:11px}}
+</style>
+</head><body>
+<header><button id="header-pro" data-testid="model-switcher-dropdown-button">GPT-6 Pro</button></header>
+<main>截图布局回归测试（示例数据，非登录账号）</main>
+<div class="notice">ChatGPT 可能会出错。工作空间数据不会用于训练模型。</div>
+<footer class="composer" data-testid="composer">
+<button class="add" aria-label="Add files">+</button>
+<div id="prompt-textarea" class="editor" contenteditable="plaintext-only" role="textbox"></div>
+<div class="actions"><div class="pro-clip"><button id="composer-pro" type="button" aria-haspopup="menu" aria-label="Select ChatGPT model"><span aria-hidden="true" style="visibility:hidden;position:absolute">Thinking effort</span><span id="composer-pro-label">Pro</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6l5 5 5-5" stroke="currentColor" fill="none" stroke-width="1.5"/></svg></button></div>
+<button id="microphone" aria-label="Dictate"><svg viewBox="0 0 24 28" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="2" width="8" height="15" rx="4"/><path d="M4 12v2a8 8 0 0016 0v-2M12 22v5"/></svg></button><button id="voice" aria-label="Start voice">≋</button></div>
+</footer>
+<script src="../src/conversation-stats.js"></script><script src="../src/pro-usage.js"></script><script src="../src/pro-quota.js"></script><script src="../src/pro-badge.js"></script>
+<script>
+window.modelClicks=0;document.querySelector('#composer-pro').addEventListener('click',()=>modelClicks++);
+window.makeUsage=function(used){const k=AIInputHistory.conversationStatsModel.periodKeys(Date.now());return{version:1,models:{pro:{total:used,days:{[k.day]:used},weeks:{[k.week]:used},months:{[k.month]:used}}}}};
+window.testBadge=new AIInputHistory.ProModelBadge({host:'chatgpt.com'});
+testBadge.updateUsage(makeUsage(1));testBadge.setSettings({trackProUsage:true,proPlan:'business-standard'});testBadge.start();
+</script></body></html>

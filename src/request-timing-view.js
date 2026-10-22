@@ -13,19 +13,22 @@
     }
 
     /** Shows elapsed seconds or restores the history icon when observation ends. */
-    update(elapsedMs) {
+    update(elapsedMs, paused = false) {
       this.active = elapsedMs !== null;
       this.panel.launcher.classList.toggle("timing-active", this.active);
+      this.panel.launcher.classList.toggle("timing-paused", this.active && paused);
       this.panel.syncLauncherMenu?.();
       if (this.active) {
         this.panel.launcher.classList.remove("aih-saved");
         const seconds = Math.floor(elapsedMs / 1000);
-        if (this.lastSeconds === seconds) return;
+        if (this.lastSeconds === seconds && this.wasPaused === paused) return;
         this.lastSeconds = seconds;
-        this.label.textContent = `${seconds}s`;
-        this.panel.launcher.setAttribute("aria-label", namespace.i18n.t("timing.running", { seconds }));
+        this.wasPaused = paused;
+        this.label.textContent = (paused ? "⏸ " : "") + `${seconds}s`;
+        this.panel.launcher.setAttribute("aria-label", namespace.i18n.t(paused ? "timing.paused" : "timing.running", { seconds }));
       } else {
         this.lastSeconds = null;
+        this.wasPaused = false;
         this.label.textContent = "";
         this.panel.launcher.setAttribute("aria-label", namespace.i18n.t("panel.launcherAria"));
       }

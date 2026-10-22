@@ -24,7 +24,7 @@
     document.querySelectorAll("[data-copy-placeholder]").forEach((el)=>{el.placeholder=copy[el.dataset.copyPlaceholder]});
     globalThis.__AIH_TEST_OPEN_SHADOW = true;
     const defaults = {
-      aiInputHistorySettings:{historyLimit:100,sendLimit:10,snapshotSeconds:60,shortcut:"Ctrl+R",language:lang,launcherEnabled:true,trackRequestTime:new URLSearchParams(location.search).has("timing"),customDomains:["127.0.0.1"]},
+      aiInputHistorySettings:{historyLimit:100,sendLimit:10,snapshotSeconds:60,shortcut:"Ctrl+R",language:lang,launcherEnabled:true,trackRequestTime:new URLSearchParams(location.search).has("timing"),trackProUsage:new URLSearchParams(location.search).has("pro"),proPlan:"pro-100",customDomains:["127.0.0.1"]},
       aiInputHistoryState:{entries:[
         {id:"1",text:lang==="en"?"Create a migration checklist for the release":"为这次发布整理一份迁移检查清单",kind:"send",createdAt:Date.now()-62000,site:"127.0.0.1",title:"AI Workspace",fieldKey:"history-1",sessionId:"1"},
         {id:"2",text:lang==="en"?"Compare the two implementation approaches":"比较这两种实现方案",kind:"send",createdAt:Date.now()-184000,site:"127.0.0.1",title:"AI Workspace",fieldKey:"history-2",sessionId:"2"},
@@ -33,23 +33,91 @@
     };
     const savedMemory=JSON.parse(localStorage.getItem("aih-fixture-memory")||"null")||defaults;
     savedMemory.aiInputHistorySettings.trackRequestTime=new URLSearchParams(location.search).has("timing");
+    savedMemory.aiInputHistorySettings.trackProUsage=new URLSearchParams(location.search).has("pro");
+    savedMemory.aiInputHistorySettings.proPlan="pro-100";
     if(new URLSearchParams(location.search).has("notify")) savedMemory.aiInputHistorySettings.completionNotification={enabled:true,provider:"browser"};
     const memory = globalThis.__testMemory = savedMemory;
+    memory.aiInputHistoryActiveTimingByUrl=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");
     const notificationMessages = globalThis.__testNotificationMessages = [];
+    const timingDebugMessages = globalThis.__testTimingDebugMessages = [];
     const storageListeners=[];
+    const runtimeListeners=globalThis.__testRuntimeListeners=[];
     let lockToken="";
     function fixtureTimingKey(site,path){const match=String(path||"").match(/(?:^|\/)c\/([^/?#]+)/);return String(site||"")+(match?"::conversation:"+match[1]:"::pending-tab:1");}
-    globalThis.chrome={runtime:{lastError:null,sendMessage(message,callback){
+    function fixturePersistTimings(states){const old=memory.aiInputHistoryActiveTimingByUrl||{};memory.aiInputHistoryActiveTimingByUrl=states;localStorage.setItem("aih-fixture-timings",JSON.stringify(states));storageListeners.forEach((listener)=>listener({aiInputHistoryActiveTimingByUrl:{oldValue:old,newValue:states}},"local"));}
+    function fixtureCountPro(state){
+      if(state?.proUsageEligible!==true||!["gpt-6-pro","gpt-5.6-pro","pro"].includes(state.proModelId))return;
+      const previous=memory.aiInputHistoryProUsage;
+      const stats=previous||{version:1,models:{},requestIds:{}};
+      if(stats.requestIds[state.requestId])return;
+      if(Number.isFinite(stats.monthResetAt)&&state.startedAt<=stats.monthResetAt
+        &&AIInputHistory.conversationStatsModel.periodKeys(state.startedAt).month
+          ===AIInputHistory.conversationStatsModel.periodKeys(stats.monthResetAt).month)return;
+      const b=stats.models[state.proModelId]||={total:0,days:{},weeks:{},months:{}};
+      const periods=AIInputHistory.conversationStatsModel.periodKeys(state.startedAt);
+      b.total+=1;b.days[periods.day]=(b.days[periods.day]||0)+1;
+      b.weeks[periods.week]=(b.weeks[periods.week]||0)+1;
+      b.months[periods.month]=(b.months[periods.month]||0)+1;
+      stats.requestIds[state.requestId]={at:state.startedAt,model:state.proModelId};
+      memory.aiInputHistoryProUsage=stats;
+      localStorage.setItem("aih-fixture-memory",JSON.stringify(memory));
+      storageListeners.forEach((listener)=>listener({aiInputHistoryProUsage:{oldValue:previous,newValue:stats}},"local"));
+    }
+    globalThis.chrome={runtime:{lastError:null,onMessage:{
+      addListener(listener){runtimeListeners.push(listener)}
+    },sendMessage(message,callback){
       if(message.type==="AIH_STORAGE_LOCK_ACQUIRE"){lockToken="fixture";callback({token:lockToken});return}
       if(message.type==="AIH_STORAGE_LOCK_RELEASE"){callback({released:message.token===lockToken});lockToken="";return}
-      if(message.type==="AIH_TIMING_SESSION_SAVE"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");for(const [key,value] of Object.entries(states))if(value?.requestId===message.state.requestId)delete states[key];states[fixtureTimingKey(message.state.site,message.state.path)]=message.state;localStorage.setItem("aih-fixture-timings",JSON.stringify(states));callback({ok:true,saved:true});return}
+      if(message.type==="AIH_PRO_USAGE_RECORD"){
+        if(memory.aiInputHistorySettings.trackProUsage!==true){callback({ok:true,counted:false,reason:"counter-disabled"});return}
+        const old=memory.aiInputHistoryProUsage;
+        const known=Boolean(old?.requestIds?.[message.usage?.requestId]);
+        fixtureCountPro({...message.usage,proUsageEligible:true});
+        const counted=!known&&Boolean(memory.aiInputHistoryProUsage?.requestIds?.[message.usage?.requestId]);
+        timingDebugMessages.push({stage:counted?"pro-usage-counted":"pro-usage-not-counted",model:message.usage?.proModelId});
+        callback({ok:true,counted});return
+      }
+      if(message.type==="AIH_TIMING_SESSION_SAVE"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");for(const [key,value] of Object.entries(states))if(value?.requestId===message.state.requestId)delete states[key];states[fixtureTimingKey(message.state.site,message.state.path)]=message.state;fixtureCountPro(message.state);fixturePersistTimings(states);callback({ok:true,saved:true});return}
       if(message.type==="AIH_TIMING_SESSION_LOAD"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");callback({ok:true,state:states[fixtureTimingKey(message.site,message.path)]||null});return}
-      if(message.type==="AIH_TIMING_SESSION_CLEAR"||message.type==="AIH_TIMING_SESSION_FINALIZE"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");let matched=false;for(const [key,value] of Object.entries(states))if(value?.requestId===message.requestId){delete states[key];matched=true}localStorage.setItem("aih-fixture-timings",JSON.stringify(states));callback({ok:true,claimed:matched});return}
+      if(message.type==="AIH_TIMING_SESSION_CLEAR"||message.type==="AIH_TIMING_SESSION_FINALIZE"){const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");let matched=false;for(const [key,value] of Object.entries(states))if(value?.requestId===message.requestId){delete states[key];matched=true}fixturePersistTimings(states);callback({ok:true,claimed:matched});return}
+      if(message.type==="AIH_TIMING_SESSION_OBSERVE"){
+        const states=JSON.parse(localStorage.getItem("aih-fixture-timings")||"{}");
+        const key=fixtureTimingKey(message.site,message.path);const state=states[key];const now=Date.now();
+        if(!state||state.requestId!==message.requestId){callback({ok:true,applied:false});return}
+        if(message.status==="manual-paused"){if(!Number.isFinite(state.pausedAt))state.pausedAt=now;state.manualPause=true;state.pauseVersion=now}
+        else if(message.status==="manual-running"){if(Number.isFinite(state.pausedAt))state.pausedDurationMs=(state.pausedDurationMs||0)+now-state.pausedAt;state.pausedAt=null;state.manualPause=false;state.pauseVersion=now}
+        else if(message.status==="paused"&&!Number.isFinite(state.pausedAt)){state.pausedAt=now;state.pauseVersion=now}
+        else if(message.status==="running"&&Number.isFinite(state.pausedAt)&&state.manualPause!==true){state.pausedDurationMs=(state.pausedDurationMs||0)+now-state.pausedAt;state.pausedAt=null;state.pauseVersion=now}
+        else if(message.status==="unread-cleared"){state.sidebarUnreadCleared=true}
+        else if(message.status==="completed"&&state.sidebarUnreadCleared===true){
+          const durationMs=Math.max(0,now-state.startedAt-(state.pausedDurationMs||0)-(Number.isFinite(state.pausedAt)?now-state.pausedAt:0));
+          const entry=memory.aiInputHistoryState.entries.find((item)=>item.id===state.entryId);
+          if(entry){entry.requestTiming={status:"completed",startedAt:state.startedAt,completedAt:now,durationMs,conversationId:state.conversationId,observedAfterResume:true,confirmedFromSidebar:true}}
+          delete states[key];fixturePersistTimings(states);
+          chrome.storage.local.set({aiInputHistoryState:memory.aiInputHistoryState},()=>{});
+          callback({ok:true,applied:true,claimed:true});return
+        }
+        fixturePersistTimings(states);callback({ok:true,applied:true});return
+      }
+      if(message.type==="AIH_PRO_USAGE_RESET"){
+        const previous=memory.aiInputHistoryProUsage;
+        const resetAt=Date.now();
+        const currentMonth=AIInputHistory.conversationStatsModel.periodKeys(resetAt).month;
+        const models=Object.fromEntries(Object.entries(previous?.models||{}).map(([id,bucket])=>[id,{
+          ...bucket,months:{...(bucket.months||{}),[currentMonth]:0}
+        }]));
+        const next={...(previous||{}),version:1,models,requestIds:previous?.requestIds||{},monthResetAt:resetAt};
+        memory.aiInputHistoryProUsage=next;
+        localStorage.setItem("aih-fixture-memory",JSON.stringify(memory));
+        storageListeners.forEach((listener)=>listener({aiInputHistoryProUsage:{oldValue:previous,newValue:next}},"local"));
+        callback({ok:true,resetAt});return
+      }
+      if(message.type==="AIH_NOTIFICATION_DEBUG_APPEND"){timingDebugMessages.push(message.entry);callback({ok:true});return}
       if(message.type==="AIH_REQUEST_COMPLETED"){notificationMessages.push(message);callback({ok:true,provider:"browser"});return}
       callback({ok:true});
     }},storage:{onChanged:{addListener(listener){storageListeners.push(listener)}},local:{get(key,callback){callback({[key]:memory[key]})},set(value,callback){const changes=Object.fromEntries(Object.entries(value).map(([key,newValue])=>[key,{oldValue:memory[key],newValue}]));Object.assign(memory,value);localStorage.setItem("aih-fixture-memory",JSON.stringify(memory));storageListeners.forEach((listener)=>listener(changes,"local"));callback()}}}};
   </script>
-  <script src="../src/history-store.js"></script><script src="../src/i18n.js"></script><script src="../src/site-profiles.js"></script><script>AIInputHistory.SiteProfiles.forSite("chatgpt.com").domains.push("127.0.0.1");</script><script src="../src/site-icon.js"></script><script src="../src/input-adapter.js"></script><script src="../src/history-navigator.js"></script><script src="../src/draggable.js"></script><script src="../src/send-detector.js"></script><script src="../src/request-timing.js"></script><script src="../src/request-timing-view.js"></script><script src="../src/prompt-queue.js"></script><script src="../src/site-filter.js"></script><script src="../src/theme-observer.js"></script><script src="../src/history-panel-utils.js"></script><script src="../src/clear-confirmation.js"></script><script src="../src/history-panel-style.js"></script><script src="../src/history-panel.js"></script><script src="../src/content.js"></script>
+  <script src="../src/history-store.js"></script><script src="../src/i18n.js"></script><script src="../src/site-profiles.js"></script><script src="../src/conversation-stats.js"></script><script src="../src/pro-usage.js"></script><script src="../src/pro-quota.js"></script><script src="../src/pro-badge.js"></script><script>AIInputHistory.SiteProfiles.forSite("chatgpt.com").domains.push("127.0.0.1");AIInputHistory.proQuotaModel.isChatGPT=(host)=>host==="127.0.0.1"||host==="chatgpt.com";</script><script src="../src/site-icon.js"></script><script src="../src/input-adapter.js"></script><script src="../src/history-navigator.js"></script><script src="../src/draggable.js"></script><script src="../src/send-detector.js"></script><script src="../src/request-timing.js"></script><script src="../src/request-timing-view.js"></script><script src="../src/sidebar-timing.js"></script><script src="../src/prompt-queue.js"></script><script src="../src/site-filter.js"></script><script src="../src/theme-observer.js"></script><script src="../src/history-panel-utils.js"></script><script src="../src/clear-confirmation.js"></script><script src="../src/history-panel-style.js"></script><script src="../src/history-panel.js"></script><script src="../src/content.js"></script>
   <script>setTimeout(()=>document.querySelector(".composer").focus(),120);setTimeout(()=>document.querySelector("[data-ai-input-history='root']")?.shadowRoot?.querySelector(".launcher")?.click(),520);</script>
 <script src="../tests/timing-fixture.js"></script>
 </body>

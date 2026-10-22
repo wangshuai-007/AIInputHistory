@@ -5,6 +5,8 @@
   const PINNED_INDEX_KEY = "aiInputHistoryPinnedIndex";
   const SETTINGS_KEY = "aiInputHistorySettings";
   const CONVERSATION_STATS_KEY = "aiInputHistoryConversationStats";
+  const PRO_USAGE_KEY = "aiInputHistoryProUsage";
+  const PRO_QUOTA_KEY = "aiInputHistoryProQuotaStatus";
   const PROMPT_QUEUE_KEY = "aiInputHistoryPromptQueues";
   const DEFAULT_SHORTCUT = "Ctrl+R";
   const DEFAULT_COMPLETION_NOTIFICATION = Object.freeze({
@@ -23,6 +25,8 @@
     launcherEnabled: true,
     queueEnabled: true,
     trackRequestTime: false,
+    trackProUsage: false,
+    proPlan: "unknown",
     completionNotification: DEFAULT_COMPLETION_NOTIFICATION,
     customDomains: []
   });
@@ -39,6 +43,11 @@
       launcherEnabled: source.launcherEnabled !== false,
       queueEnabled: source.queueEnabled !== false,
       trackRequestTime: source.trackRequestTime === true,
+      trackProUsage: source.trackProUsage === true,
+      proPlan: ["unknown", "pro-100", "pro-200", "pro-500", "pro-unverified",
+        "business-unverified", "plus", "free", "go",
+        "business-standard", "business-premium", "enterprise"]
+        .includes(source.proPlan) ? source.proPlan : "unknown",
       completionNotification: sanitizeCompletionNotification(source.completionNotification),
       customDomains: [...new Set((Array.isArray(source.customDomains) ? source.customDomains : [])
         .map(normalizeDomain).filter(Boolean))].slice(0, 100)
@@ -437,6 +446,20 @@
       return model.summarize(result[CONVERSATION_STATS_KEY], now);
     }
 
+    async getProQuotaStatus(now = Date.now()) {
+      const result = await storageGet(PRO_QUOTA_KEY);
+      const raw = result[PRO_QUOTA_KEY] || {};
+      return Object.fromEntries(Object.entries(raw)
+        .filter(([model, value]) => namespace.proQuotaModel?.MODEL_LABELS[model]
+          && namespace.proQuotaModel?.activeStatus(value, now)));
+    }
+
+    async getProUsageStats(now = Date.now()) {
+      const result = await storageGet(PRO_USAGE_KEY);
+      return namespace.proUsageModel?.summarize(result[PRO_USAGE_KEY], now)
+        || { all: { total: 0, today: 0, thisWeek: 0, thisMonth: 0 }, rows: [] };
+    }
+
     async recordSendStat({ aiKey, site, at = Date.now() } = {}) {
       const model = namespace.conversationStatsModel;
       const key = String(aiKey || "").toLocaleLowerCase();
@@ -556,6 +579,8 @@
         if (!Number.isFinite(timing.completedAt) || timing.completedAt < timing.startedAt) throw new Error("无效回复时间");
         value.completedAt = timing.completedAt;
         value.durationMs = timing.completedAt - timing.startedAt;
+        if (timing.observedAfterResume === true) value.observedAfterResume = true;
+        if (timing.confirmedFromSidebar === true) value.confirmedFromSidebar = true;
       }
       return withStorageLock(async () => {
         const state = await this.getState();
@@ -578,6 +603,8 @@
   namespace.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
   namespace.DEFAULT_COMPLETION_NOTIFICATION = DEFAULT_COMPLETION_NOTIFICATION;
   namespace.HistoryStore = HistoryStore;
-  namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY, pinnedIndex: PINNED_INDEX_KEY, sendStats: CONVERSATION_STATS_KEY, conversationStats: CONVERSATION_STATS_KEY, promptQueue: PROMPT_QUEUE_KEY };
+  namespace.STORAGE_KEYS = { settings: SETTINGS_KEY, state: STORAGE_KEY, pinnedIndex: PINNED_INDEX_KEY,
+    sendStats: CONVERSATION_STATS_KEY, conversationStats: CONVERSATION_STATS_KEY,
+    proUsage: PRO_USAGE_KEY, proQuota: PRO_QUOTA_KEY, promptQueue: PROMPT_QUEUE_KEY };
   namespace.historyModel = { collapseSnapshotsForSend, compactSentSnapshots, filterEntries, latestSnapshotTime, matchesShortcut, normalizeDomain, normalizeShortcut, pruneEntries, sanitizeAvailableTimes, sanitizeCompletionNotification, sanitizePromptQueueItem, sanitizePromptQueues, sanitizeSettings, shortcutFromEvent };
 })(globalThis.AIInputHistory = globalThis.AIInputHistory || {});

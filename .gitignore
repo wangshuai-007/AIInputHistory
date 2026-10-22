@@ -1,5 +1,6 @@
 # Dependencies and generated packages
 node_modules/
+/dist/
 *.zip
 *.crx
 *.pem

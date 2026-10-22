@@ -30,6 +30,28 @@ test('发送时间与完成元数据关联正确，更新不丢固定状态', as
   assert.equal(saved.requestTiming.completedAt, 5230);
 });
 
+test('离开会话后补记完成时保存时间上限标记，并在历史里明确显示', async () => {
+  const { store, ns } = setup();
+  const entry = await store.addEntry('后台会话已完成', 'send', {
+    fieldKey: 'f', site: 'chatgpt.com', sentAt: 1000, trackRequestTime: true
+  });
+  await store.updateRequestTiming(entry.id, {
+    status: 'completed', startedAt: 1000, completedAt: 16_000, conversationId: 'session-123',
+    observedAfterResume: true
+  });
+  const saved = (await store.getState()).entries.find((value) => value.id === entry.id);
+  assert.equal(saved.requestTiming.observedAfterResume, true);
+  assert.equal(saved.requestTiming.conversationId, 'session-123');
+  const zh = ns.historyPanelUtils.timingMarkup(saved);
+  assert.match(zh, /恢复后确认/);
+  assert.match(zh, /最多 15.0 秒/);
+  assert.match(zh, /确认于/);
+  ns.i18n.setLanguage('en');
+  const en = ns.historyPanelUtils.timingMarkup(saved);
+  assert.match(en, /Confirmed after return/);
+  assert.match(en, /at most 15.0s/);
+});
+
 test('清空或淘汰记录后完成回调不复活历史', async () => {
   const { store } = setup();
   const entry = await store.addEntry('问题', 'send', { fieldKey: 'f' });

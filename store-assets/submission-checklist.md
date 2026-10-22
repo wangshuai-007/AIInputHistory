@@ -2,7 +2,7 @@
 
 ## 已准备文件
 
-- 扩展上传包：`dist/ai-input-history-1.32.1.zip`
+- 扩展上传包：`dist/ai-input-history-1.37.16.zip`
 - 商店图标：`store-assets/store-icon-128.png`
 - 小型宣传图：`store-assets/promo-small-440x280.png`
 - Marquee 宣传图：`store-assets/promo-marquee-1400x560.png`
@@ -22,7 +22,13 @@ Save and restore text the user enters into AI chat composers using browser-local
 
 ### `storage` 权限说明
 
-Stores user-created prompt history, drafts, ChatGPT queued prompts, per-AI send statistics, redacted notification debug logs, settings, cached site icons, and floating-interface positions locally in the browser. No history is sent to a developer server.
+Stores prompt history, drafts, queued prompts, per-AI and Pro counts, request-ID deduplication, active timers, redacted logs, settings, icons, and interface positions locally. Sanitized pending network metadata uses session storage. No history is sent to a developer server.
+
+### `webRequest` 与 ChatGPT 必需网站权限说明
+
+Only when the user enables local Pro counting, observe POST conversation requests on chatgpt.com and chat.openai.com, classify model/mode fields, and inspect HTTP status. No request modification or chat response-body reading is performed. Raw request bodies, prompts, cookies, and authentication headers are not persisted in network diagnostics or the pending cache. A bounded sanitized cache in chrome.storage.session supports worker restarts. Counts and request-ID deduplication remain local and are not official quota balances.
+
+Explicitly enabling Pro counting, or clicking the account-plan read button, triggers existing same-origin account/member queries for the current account and the user's own seat. Raw account/member data and temporary tokens are not retained or exported.
 
 ### `notifications` 权限说明
 
@@ -48,7 +54,7 @@ The content script detects AI chat composers and displays the local-history cont
 
 ## 发布前仍需人工完成
 
-- 将 `{{PUBLISHER_EMAIL}}` 替换为真实支持邮箱；
+- 核对隐私政策中的支持邮箱 `support@wangshuai.app` 及实际发布主体；
 - 把隐私政策发布到公开 HTTPS 页面，并填写 Dashboard 的 Privacy policy URL；
 - 填写开发者名称、支持 URL 和联系邮箱；
 - 开启 Google 账号两步验证并完成开发者账号注册；
@@ -57,4 +63,4 @@ The content script detects AI chat composers and displays the local-history cont
 
 ## 权限审核提醒
 
-当前内容脚本使用 `<all_urls>`，用于支持用户自行添加任意 AI 域名。另声明可选 `notifications` 和可选 HTTP/HTTPS host permissions：前者只在选择浏览器系统通知时申请，后者只在用户主动配置第三方通知或自定义请求时按实际目标域名申请。以上权限可能增加人工审核时间，商店说明、隐私政策和 Dashboard 权限理由必须保持一致，不得声称扩展只访问固定站点或永不向用户指定的通知服务发起请求。
+当前内容脚本使用 `<all_urls>`，用于支持用户自行添加任意 AI 域名。还声明 `webRequest` 及 chatgpt.com / chat.openai.com 的必需网站权限，用于主动开启的本机 Pro 统计；这些权限自 1.37.8 已存在，1.37.9 至 1.37.16 均未新增权限。另声明可选 `notifications` 和可选 HTTP/HTTPS host permissions：前者只在选择浏览器系统通知时申请，后者只在用户主动配置第三方通知或自定义请求时按实际目标域名申请。以上权限可能增加人工审核时间，商店说明、隐私政策和 Dashboard 权限理由必须保持一致，不得声称扩展只访问固定站点或永不向用户指定的通知服务发起请求。

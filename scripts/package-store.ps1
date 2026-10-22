@@ -22,8 +22,24 @@ try {
     foreach ($directory in @("src", "popup", "assets", "_locales")) {
         Copy-Item -LiteralPath (Join-Path $root $directory) -Destination $staging -Recurse
     }
-    $paths = Get-ChildItem -LiteralPath $staging | Select-Object -ExpandProperty FullName
-    Compress-Archive -LiteralPath $paths -DestinationPath $archive -CompressionLevel Optimal
+    # Compress-Archive on Windows writes backslash entry names, which are not
+    # portable ZIP paths. Use '/' entries for Chrome Web Store and all unzip tools.
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::Open(
+        $archive, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        $files = Get-ChildItem -LiteralPath $staging -Recurse -File
+        foreach ($file in $files) {
+            $relative = $file.FullName.Substring($staging.Length).TrimStart('\', '/')
+            $entry = $relative.Replace('\', '/')
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $zip, $file.FullName, $entry,
+                [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+        }
+    } finally {
+        $zip.Dispose()
+    }
 } finally {
     Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
 }

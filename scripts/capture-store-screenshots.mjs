@@ -6,6 +6,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 const root = path.resolve(import.meta.dirname, "..");
+const extensionVersion = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8")).version;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const chromePath = [
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -111,7 +112,7 @@ const popupMock = `(() => {
     aiInputHistoryState: { entries: [], drafts: {}, positions: {}, siteIcons: {} }
   };
   globalThis.chrome = {
-    runtime: { lastError: null, getManifest: () => ({ version: "1.32.1" }), sendMessage: (_message, callback) => callback?.({ ok: true }) },
+    runtime: { lastError: null, getManifest: () => ({ version: ${JSON.stringify(extensionVersion)} }), sendMessage: (_message, callback) => callback?.({ ok: true }) },
     permissions: { request: (_request, callback) => callback(true) },
     storage: {
       onChanged: { addListener(listener) { listeners.push(listener); } },
